@@ -30,15 +30,29 @@
     localStorage.removeItem(SESSION_KEY);
   }
 
-  async function api(action, payload) {
+  function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+  // 2 повторные попытки при сетевом сбое (fetch бросает исключение — обрыв
+  // соединения, таймаут и т.п.), прежде чем сдаться. Без этого случайный
+  // разовый сбой посреди отправки многих изменений (например, при большом
+  // импорте) навсегда оставлял бы одну задачу несинхронизированной, пока
+  // пользователь случайно не тронет что-то ещё.
+  async function api(action, payload, attempt) {
+    attempt = attempt || 0;
     const session = loadSession();
     const body = Object.assign({ action }, payload, session ? { token: session.token } : {});
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body)
-    });
-    return res.json();
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(body)
+      });
+      return await res.json();
+    } catch (err) {
+      if (attempt >= 2) throw err;
+      await wait(800 * (attempt + 1));
+      return api(action, payload, attempt + 1);
+    }
   }
 
   // ---------- Разметка ----------

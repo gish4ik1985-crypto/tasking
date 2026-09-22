@@ -139,8 +139,23 @@
     return local;
   }
 
+  // Считает задачи/разделы/проекты во всём состоянии — используется ниже
+  // как защита от того, чтобы опрос сервера случайно не "стёр" с экрана
+  // данные, которые на самом деле ещё просто не долетели до сервера (см.
+  // isPushing) — даже если по какой-то другой причине эта защита не
+  // сработает, опрос никогда не должен молча УМЕНЬШАТЬ количество задач.
+  function countEntities(local) {
+    let tasks = 0, sections = 0;
+    (local.projects || []).forEach((p) => {
+      tasks += (p.tasks || []).length;
+      sections += (p.sections || []).length;
+    });
+    return { projects: (local.projects || []).length, sections, tasks };
+  }
+
   let pollTimer = null;
   let polling = false;
+  let isPushing = false; // true, пока doPush() ждёт ответы от сервера — см. push()/doPush()
   // Раз в POLL_INTERVAL_MS спрашивает у сервера, не появилось ли чего-то
   // нового от других людей (назначенная задача, изменения в своём же
   // проекте от совладельца и т.п.), и отдаёт свежие данные в app.js через
@@ -149,7 +164,7 @@
   function startPolling() {
     if (pollTimer) return;
     pollTimer = setInterval(async () => {
-      if (polling || !window.TaskingAuth.getSession() || !window.TaskingApplyExternalState) return;
+      if (polling || isPushing || !window.TaskingAuth.getSession() || !window.TaskingApplyExternalState) return;
       polling = true;
       try {
         const [stateRes, usersRes] = await Promise.all([api("getState", {}), api("listUsers", {})]);
@@ -160,6 +175,20 @@
         // Ничего нового — не дёргаем UI зря (не меняем updatedAt, чтобы не
         // создавать ложных "конфликтов" при следующем локальном save()).
         if (prevLocal && JSON.stringify(fresh.projects) === JSON.stringify(prevLocal.projects)) return;
+        // Опрос НИКОГДА не должен молча уменьшать число проектов/разделов/
+        // задач на экране — если пришло МЕНЬШЕ, чем уже видно, это почти
+        // наверняка означает, что часть локальных изменений ещё не успела
+        // дойти до сервера (см. isPushing), а не то, что их кто-то удалил.
+        // В этом случае просто пропускаем цикл и попробуем ещё раз позже.
+        if (prevLocal && isPushing) return;
+        if (prevLocal) {
+          const before = countEntities(prevLocal);
+          const after = countEntities(fresh);
+          if (after.projects < before.projects || after.sections < before.sections || after.tasks < before.tasks) {
+            console.warn("Опрос сервера пропущен: с сервера пришло меньше данных, чем сейчас на экране (похоже, часть изменений ещё не синхронизировалась).");
+            return;
+          }
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
         resetSnapshot(fresh);
         window.TaskingApplyExternalState(fresh);
@@ -214,13 +243,43 @@
   // следующем сохранении она снова не найдётся в snapshot и будет
   // отправлена как новая (пересоздана).
   function push(state) {
+    // isPushing поднимаем сразу (не дожидаясь срабатывания debounce) — это
+    // и есть тот самый флаг, который не даёт опросу сервера (см.
+    // startPolling выше) перезаписать экран, пока изменения ещё не
+    // долетели до таблицы: см. инцидент с "исчезновением" задач сразу
+    // после импорта большого JSON — опрос успевал сработать раньше, чем
+    // все запросы на сохранение уходили на сервер.
+    isPushing = true;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(() => doPush(state).catch((e) => console.error("Синхронизация с сервером не удалась:", e)), 500);
   }
 
   async function doPush(state) {
-    if (!window.TaskingAuth.getSession()) return;
-    const calls = [];
+    try {
+      if (!window.TaskingAuth.getSession()) return;
+      await doPushInner(state);
+    } finally {
+      isPushing = false;
+    }
+  }
+
+  // Выполняет thunks (функции без аргументов, возвращающие промис) не более
+  // чем limit одновременно — при большом импорте изменений может набраться
+  // сотня запросов сразу, а Apps Script плохо переносит такую конкурентность
+  // (таймауты, случайные ошибки при параллельной записи в один лист).
+  async function runLimited(thunks, limit) {
+    let i = 0;
+    async function worker() {
+      while (i < thunks.length) {
+        const thunk = thunks[i++];
+        await thunk();
+      }
+    }
+    await Promise.all(new Array(Math.min(limit, thunks.length)).fill(0).map(worker));
+  }
+
+  async function doPushInner(state) {
+    const thunks = [];
 
     const currentProjectIds = new Set((state.projects || []).map((p) => p.id));
     const currentSectionIds = new Set();
@@ -233,17 +292,17 @@
     // Удаления — раньше существовало (было в snapshot), сейчас пропало.
     Object.keys(snapshot.tasks).forEach((id) => {
       if (!currentTaskIds.has(id)) {
-        calls.push(api("deleteTask", { taskId: id }).then(() => { delete snapshot.tasks[id]; }));
+        thunks.push(() => api("deleteTask", { taskId: id }).then(() => { delete snapshot.tasks[id]; }));
       }
     });
     Object.keys(snapshot.sections).forEach((id) => {
       if (!currentSectionIds.has(id)) {
-        calls.push(api("deleteSection", { sectionId: id }).then(() => { delete snapshot.sections[id]; }));
+        thunks.push(() => api("deleteSection", { sectionId: id }).then(() => { delete snapshot.sections[id]; }));
       }
     });
     Object.keys(snapshot.projects).forEach((id) => {
       if (!currentProjectIds.has(id)) {
-        calls.push(api("deleteProject", { projectId: id }).then(() => { delete snapshot.projects[id]; }));
+        thunks.push(() => api("deleteProject", { projectId: id }).then(() => { delete snapshot.projects[id]; }));
       }
     });
 
@@ -251,23 +310,23 @@
     (state.projects || []).forEach((p) => {
       const pJson = projectPayload(p);
       if (p._canEdit !== false && snapshot.projects[p.id] !== pJson) {
-        calls.push(api("saveProject", { project: JSON.parse(pJson) }).then(() => { snapshot.projects[p.id] = pJson; }));
+        thunks.push(() => api("saveProject", { project: JSON.parse(pJson) }).then(() => { snapshot.projects[p.id] = pJson; }));
       }
       (p.sections || []).forEach((s, i) => {
         const sJson = sectionPayload(s, p.id, i);
         if (p._canEdit !== false && snapshot.sections[s.id] !== sJson) {
-          calls.push(api("saveSection", { section: JSON.parse(sJson) }).then(() => { snapshot.sections[s.id] = sJson; }));
+          thunks.push(() => api("saveSection", { section: JSON.parse(sJson) }).then(() => { snapshot.sections[s.id] = sJson; }));
         }
       });
       (p.tasks || []).forEach((t) => {
         const tJson = taskPayload(t, p.id);
         if (snapshot.tasks[t.id] !== tJson) {
-          calls.push(api("saveTask", { task: JSON.parse(tJson) }).then(() => { snapshot.tasks[t.id] = tJson; }));
+          thunks.push(() => api("saveTask", { task: JSON.parse(tJson) }).then(() => { snapshot.tasks[t.id] = tJson; }));
         }
       });
     });
 
-    await Promise.all(calls);
+    await runLimited(thunks, 4);
   }
 
   // Помечает задачу просмотренной (снимает бейдж "новое"/"изменено") —
