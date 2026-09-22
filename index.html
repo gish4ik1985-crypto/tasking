@@ -13,31 +13,32 @@
 <div class="app">
 
   <!-- Боковая панель слева: ссылки на Дашборд и Люди + дерево проектов -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
       <div class="brand">
         <span class="brand-mark">T</span>
         <span class="brand-name">Tasking</span>
       </div>
+      <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Свернуть панель" aria-label="Свернуть боковую панель">«</button>
     </div>
 
-    <button class="nav-dashboard" id="dashboardNavBtn">
-      <span class="nav-dashboard-icon">◧</span> Дашборд<span class="nav-trash-count nav-unread-count" id="unreadCount" hidden aria-live="polite"></span>
+    <button class="nav-dashboard" id="dashboardNavBtn" title="Дашборд">
+      <span class="nav-dashboard-icon">◧</span><span class="nav-label">Дашборд</span><span class="nav-trash-count nav-unread-count" id="unreadCount" hidden aria-live="polite"></span>
     </button>
-    <button class="nav-dashboard" id="peopleNavBtn">
-      <span class="nav-dashboard-icon">☺</span> Люди
+    <button class="nav-dashboard" id="peopleNavBtn" title="Люди">
+      <span class="nav-dashboard-icon">☺</span><span class="nav-label">Люди</span>
     </button>
-    <button class="nav-dashboard" id="trashNavBtn">
-      <span class="nav-dashboard-icon">🗑</span> Корзина<span class="nav-trash-count" id="trashCount" hidden aria-live="polite"></span>
+    <button class="nav-dashboard" id="trashNavBtn" title="Корзина">
+      <span class="nav-dashboard-icon">🗑</span><span class="nav-label">Корзина</span><span class="nav-trash-count" id="trashCount" hidden aria-live="polite"></span>
     </button>
-    <button class="nav-dashboard" id="archiveNavBtn">
-      <span class="nav-dashboard-icon">🗄</span> Архив<span class="nav-trash-count" id="archiveCount" hidden aria-live="polite"></span>
+    <button class="nav-dashboard" id="archiveNavBtn" title="Архив">
+      <span class="nav-dashboard-icon">🗄</span><span class="nav-label">Архив</span><span class="nav-trash-count" id="archiveCount" hidden aria-live="polite"></span>
     </button>
 
     <div class="sidebar-section-label">Проекты</div>
 
-    <button class="btn-add-project" id="addProjectBtn">
-      <span class="icon-plus">+</span> Новый проект
+    <button class="btn-add-project" id="addProjectBtn" title="Новый проект">
+      <span class="icon-plus">+</span><span class="nav-label">Новый проект</span>
     </button>
     <div class="add-project-inline" id="addProjectInline" hidden>
       <input type="text" id="addProjectInput" placeholder="Название проекта">

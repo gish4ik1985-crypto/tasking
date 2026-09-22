@@ -18,6 +18,10 @@
 
   // Ключ, под которым всё состояние приложения хранится в localStorage браузера.
   const STORAGE_KEY = "tasking-state-v1";
+  // Свёрнута ли боковая панель до узкой полосы со значками — это чисто
+  // визуальная настройка КОНКРЕТНОГО браузера/устройства, а не данные
+  // задач, поэтому хранится отдельно и никуда не синхронизируется.
+  const SIDEBAR_COLLAPSED_KEY = "tasking-sidebar-collapsed-v1";
   // Версия СТРУКТУРЫ данных (не путать с ключом хранилища выше). Отличие от
   // простого "добавили новое поле" (это по-прежнему безопасно чинить прямо
   // в normalizeState, задавая значение по умолчанию) — сюда попадают
@@ -603,6 +607,9 @@
   // константы — дальше по коду обращаемся к ним напрямую, без повторного
   // document.getElementById().
 
+  const appEl = document.querySelector(".app");
+  const sidebarEl = document.getElementById("sidebar");
+  const sidebarCollapseBtn = document.getElementById("sidebarCollapseBtn");
   const projectListEl = document.getElementById("projectList");
   const addProjectBtn = document.getElementById("addProjectBtn");
   const addProjectInline = document.getElementById("addProjectInline");
@@ -1515,6 +1522,7 @@
       item.style.paddingLeft = (8 + depth * 16) + "px";
       item.draggable = true;
       item.dataset.projectId = project.id;
+      item.title = project.name; // в свёрнутой панели остаётся только цветной кружок — имя видно во всплывающей подсказке
       item.innerHTML = `
         ${hasChildren ? `<button class="chevron${collapsed ? "" : " expanded"}" data-toggle="${project.id}" aria-label="${collapsed ? "Развернуть подпроекты" : "Свернуть подпроекты"}" aria-expanded="${!collapsed}">▶</button>` : `<span class="chevron-spacer"></span>`}
         <span class="dot" style="background:${project.color}"></span>
@@ -4401,6 +4409,30 @@
   analyticsClose.addEventListener("click", closeProjectAnalytics);
   analyticsPanel.addEventListener("click", (e) => {
     if (e.target === analyticsPanel) closeProjectAnalytics();
+  });
+
+  // Боковая панель: сворачивание в узкую полосу со значками (нужно на
+  // узких/вертикальных экранах, где подписи не влезают, см. запрос
+  // пользователя). Состояние — чисто локальная настройка устройства, а не
+  // данные задач, поэтому просто localStorage, без синхронизации.
+  function applySidebarCollapsed(collapsed) {
+    sidebarEl.classList.toggle("collapsed", collapsed);
+    appEl.classList.toggle("sidebar-collapsed", collapsed);
+    sidebarCollapseBtn.textContent = collapsed ? "»" : "«";
+    sidebarCollapseBtn.title = collapsed ? "Развернуть панель" : "Свернуть панель";
+    sidebarCollapseBtn.setAttribute("aria-label", sidebarCollapseBtn.title);
+  }
+  const savedSidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+  // Нет сохранённого выбора — сворачиваем сами на узких экранах (телефон
+  // в портретной ориентации) и на низких широких (телефон "лёжа" —
+  // альбомная ориентация, где иначе кнопки шапки съедают всю ширину
+  // вместе с сайдбаром), иначе сайдбар просто нечем было бы закрыть.
+  const narrowOrShortLandscape = window.innerWidth <= 720 || window.innerHeight <= 480;
+  applySidebarCollapsed(savedSidebarCollapsed === null ? narrowOrShortLandscape : savedSidebarCollapsed === "1");
+  sidebarCollapseBtn.addEventListener("click", () => {
+    const collapsed = !sidebarEl.classList.contains("collapsed");
+    applySidebarCollapsed(collapsed);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
   });
 
   // Точка входа: один раз навешиваем обработчики полей панели деталей и

@@ -44,7 +44,9 @@ body {
   display: grid;
   grid-template-columns: 260px 1fr;
   height: 100vh;
+  transition: grid-template-columns .15s ease;
 }
+.app.sidebar-collapsed { grid-template-columns: 60px 1fr; }
 
 /* ---------- Боковая панель (сайдбар): список проектов, Дашборд, Люди ---------- */
 
@@ -54,16 +56,65 @@ body {
   display: flex;
   flex-direction: column;
   padding: 18px 14px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
-.sidebar-top { margin-bottom: 18px; }
+.sidebar-top {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.sidebar-collapse-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.sidebar-collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Узкая панель — только значки, без подписей и второстепенных кнопок;
+   переключается кнопкой «/» выше и запоминается в localStorage (см.
+   sidebarCollapseBtn в app.js) — нужна на вертикальных/узких экранах,
+   где полная подпись не влезает. */
+.sidebar.collapsed { padding-left: 10px; padding-right: 10px; }
+.sidebar.collapsed .brand-name,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-trash-count,
+.sidebar.collapsed .sidebar-section-label,
+.sidebar.collapsed .project-item .name,
+.sidebar.collapsed .project-item .count,
+.sidebar.collapsed .project-item .unread-dot,
+.sidebar.collapsed .project-item .add-sub-btn,
+.sidebar.collapsed .project-item .project-analytics-btn,
+.sidebar.collapsed .sidebar-bottom {
+  display: none;
+}
+.sidebar.collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+.sidebar.collapsed .sidebar-top { flex-direction: column; gap: 8px; }
+.sidebar.collapsed .brand { padding: 0; }
+.sidebar.collapsed .nav-dashboard,
+.sidebar.collapsed .btn-add-project { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.collapsed .project-item { justify-content: center; padding-left: 0 !important; }
+.sidebar.collapsed .project-item .chevron,
+.sidebar.collapsed .project-item .chevron-spacer { display: none; }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .brand-mark {
@@ -295,6 +346,7 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   flex-shrink: 0;
+  min-width: 0;
 }
 .topbar[hidden] { display: none; }
 
@@ -330,7 +382,14 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px; /* место под скроллбар, чтобы не обрезал кнопки */
 }
+.topbar-right > * { flex-shrink: 0; }
 
 .search-box input {
   width: 160px;
@@ -2149,12 +2208,23 @@ body {
 }
 
 @media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
+  /* Полностью прятать сайдбар нечем было открыть обратно — вместо этого
+     он по умолчанию сворачивается в узкую полосу со значками (см.
+     applySidebarCollapsed в app.js), а не исчезает совсем. */
   .detail-overlay { padding: 0; }
   .detail-modal { max-width: 100%; height: 100%; border-radius: 0; }
   .analytics-overlay { padding: 0; }
   .analytics-modal { max-width: 100%; height: 100%; border-radius: 0; }
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .project-title { max-width: 34vw; font-size: 16px; }
+  .search-box input { width: 110px; }
+}
+
+/* Низкий и широкий экран (телефон "лёжа") — то же самое переполнение
+   шапки, но по высоте, а не по ширине. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .topbar { padding: 8px 12px; }
+  .search-box { display: none; }
 }
 
 /* ---------- Вход / стартовая страница (js/auth.js) ---------- */
