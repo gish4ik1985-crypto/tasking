@@ -106,9 +106,15 @@ function doGet(e) {
 // Действия, которые пишут в таблицу — для них нужна блокировка (см. ниже).
 // Чтения (getState/listUsers/whoAmI) в неё не берём, чтобы не тормозить
 // параллельную работу нескольких людей без необходимости.
+// saveComment сюда намеренно не входит: в отличие от saveProject/saveTask
+// у него нет решения "создать или обновить" по id (это всегда appendRow
+// новой строки со свежим Utilities.getUuid()) — то есть той самой гонки
+// "два запроса одновременно решили, что записи ещё нет" здесь в принципе
+// быть не может, а блокировка на отправку сообщения только зря добавляет
+// задержку (пользователи жаловались, что чат отправляется медленно).
 var WRITE_ACTIONS = ['login', 'updateProfile', 'createStarterProject', 'saveProject', 'saveSection', 'saveTask',
   'deleteTask', 'deleteProject', 'deleteSection', 'markViewed', 'adminUpdateUser', 'adminDeleteUser',
-  'saveComment', 'deleteComment'];
+  'deleteComment'];
 
 function doPost(e) {
   var body = {};
@@ -654,7 +660,10 @@ function handleGetComments(userId, taskId) {
 
 // Папка в Drive, куда складываются все файлы, прикреплённые к сообщениям.
 // Id папки кэшируется в Script Properties, чтобы не искать её по имени
-// на каждой отправке файла.
+// на каждой отправке файла. Доступ "по ссылке" ставится один раз здесь,
+// на саму папку (при её создании), а не на каждый файл в handleSaveComment —
+// файлы внутри наследуют доступ родительской папки, а лишний вызов Drive
+// API на каждое отправляемое сообщение с файлом заметно тормозил отправку.
 function getAttachmentsFolder() {
   var props = PropertiesService.getScriptProperties();
   var folderId = props.getProperty('ATTACHMENTS_FOLDER_ID');
@@ -662,7 +671,13 @@ function getAttachmentsFolder() {
     try { return DriveApp.getFolderById(folderId); } catch (e) { /* папку удалили вручную — создадим заново ниже */ }
   }
   var existing = DriveApp.getFoldersByName('Tasking Attachments');
-  var folder = existing.hasNext() ? existing.next() : DriveApp.createFolder('Tasking Attachments');
+  var folder;
+  if (existing.hasNext()) {
+    folder = existing.next();
+  } else {
+    folder = DriveApp.createFolder('Tasking Attachments');
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  }
   props.setProperty('ATTACHMENTS_FOLDER_ID', folder.getId());
   return folder;
 }
@@ -687,10 +702,6 @@ function handleSaveComment(userId, body) {
       if (bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'Файл слишком большой (максимум 10 МБ)' };
       var blob = Utilities.newBlob(bytes, file.mimeType || 'application/octet-stream', file.name || 'file');
       var driveFile = getAttachmentsFolder().createFile(blob);
-      // Доступ по ссылке — без него получатель ссылки (свои же коллеги по
-      // задаче) не сможет открыть файл, т.к. по умолчанию Drive-файл виден
-      // только тому, под чьим аккаунтом выполняется скрипт.
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       comment.fileName = file.name || driveFile.getName();
       comment.fileMimeType = file.mimeType || blob.getContentType() || '';
       comment.fileSize = bytes.length;

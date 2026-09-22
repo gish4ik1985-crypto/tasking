@@ -1109,6 +1109,8 @@ body {
 }
 .comment-file:hover { text-decoration: underline; }
 .comment-file-size { color: var(--text-faint); }
+.comment-row.pending { opacity: 0.6; }
+.comment-file-pending { color: var(--text-faint); cursor: default; }
 .comment-delete {
   position: absolute;
   top: 2px;

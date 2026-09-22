@@ -3504,6 +3504,15 @@
   const MAX_COMMENT_FILE_BYTES = 10 * 1024 * 1024; // 10 МБ — совпадает с лимитом на сервере (gas/Code.gs)
   let pendingCommentFile = null;
   let commentsLoadToken = 0;
+  // Список сообщений, отрисованный сейчас (для открытой задачи) — по нему
+  // делаются точечные правки (добавить своё сообщение, убрать удалённое)
+  // без похода на сервер за всем списком заново.
+  let currentComments = [];
+  // Последний известный список комментариев по каждой задаче (в памяти
+  // вкладки) — при повторном открытии уже просмотренной задачи в этой же
+  // сессии чат показывается сразу из кэша, а не ждёт новый round-trip к
+  // Apps Script (у него самого по себе задержка на каждый запрос).
+  const commentsCacheByTask = new Map();
 
   function formatFileSize(bytes) {
     const n = Number(bytes) || 0;
@@ -3545,17 +3554,17 @@
           const mine = !!myId && c.authorId === myId;
           const fileHtml = c.fileUrl
             ? `<a class="comment-file" href="${c.fileUrl}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(c.fileName || "файл")}${c.fileSize ? ` <span class="comment-file-size">(${formatFileSize(c.fileSize)})</span>` : ""}</a>`
-            : "";
+            : (c._pending && c.fileName ? `<span class="comment-file comment-file-pending">📎 ${escapeHtml(c.fileName)}</span>` : "");
           return `
-            <div class="comment-row ${mine ? "mine" : ""}">
+            <div class="comment-row ${mine ? "mine" : ""} ${c._pending ? "pending" : ""}">
               <div class="comment-bubble" style="--chip-color:${(author && author.color) || "#6d5dfc"}">
                 <div class="comment-meta">
                   <span class="comment-author">${escapeHtml(author ? author.name : "?")}</span>
-                  <span class="comment-time">${formatCommentTime(c.createdAt)}</span>
+                  <span class="comment-time">${c._pending ? "отправляется…" : formatCommentTime(c.createdAt)}</span>
                 </div>
                 ${c.text ? `<div class="comment-text">${escapeHtml(c.text)}</div>` : ""}
                 ${fileHtml}
-                ${mine ? `<button type="button" class="comment-delete" data-delete-comment="${c.id}" title="Удалить сообщение" aria-label="Удалить сообщение">×</button>` : ""}
+                ${mine && !c._pending ? `<button type="button" class="comment-delete" data-delete-comment="${c.id}" title="Удалить сообщение" aria-label="Удалить сообщение">×</button>` : ""}
               </div>
             </div>`;
         }).join("")
@@ -3570,7 +3579,12 @@
         try {
           const res = await window.TaskingSync.deleteComment(commentId);
           if (!res || !res.ok) throw new Error((res && res.error) || "");
-          if (openTaskId === taskId) loadComments(taskId);
+          if (openTaskId !== taskId) return;
+          // Убираем только это сообщение из уже отрисованного списка —
+          // не ждём ещё один поход на сервер за всем чатом заново.
+          currentComments = currentComments.filter((c) => c.id !== commentId);
+          commentsCacheByTask.set(taskId, currentComments);
+          renderComments(currentComments);
         } catch (err) {
           btn.disabled = false;
           showToast(err.message || "Не удалось удалить сообщение");
@@ -3579,10 +3593,13 @@
     });
   }
 
-  // Подгружает обсуждение с сервера при открытии панели деталей. Если
-  // приложение работает без синхронизации (TaskingSync недоступен —
-  // например, в тестовом окружении) — просто прячет форму отправки:
-  // локально комментарии хранить негде и незачем.
+  // Подгружает обсуждение при открытии панели деталей. Если для этой
+  // задачи уже есть кэш с прошлого открытия (в этой же вкладке) — сразу
+  // показываем его (мгновенно, без ожидания сети) и тихо обновляем в
+  // фоне; если кэша нет — показываем "Загрузка…", как раньше. Apps Script
+  // сам по себе отвечает не быстрее секунды-двух на запрос, так что смысл
+  // в том, чтобы не заставлять ждать это ВТОРОЙ раз при каждом повторном
+  // открытии одной и той же задачи.
   async function loadComments(taskId) {
     pendingCommentFile = null;
     renderCommentFileChip();
@@ -3590,13 +3607,22 @@
 
     if (!window.TaskingSync || !window.TaskingSync.getComments) {
       commentForm.hidden = true;
+      currentComments = [];
       commentsList.innerHTML = `<div class="comments-empty">Обсуждение доступно только в синхронизированной версии приложения.</div>`;
       return;
     }
     commentForm.hidden = false;
 
+    const cached = commentsCacheByTask.get(taskId);
+    if (cached) {
+      currentComments = cached;
+      renderComments(currentComments);
+    } else {
+      currentComments = [];
+      commentsList.innerHTML = `<div class="comments-empty">Загрузка…</div>`;
+    }
+
     const myToken = ++commentsLoadToken;
-    commentsList.innerHTML = `<div class="comments-empty">Загрузка…</div>`;
     let res;
     try {
       res = await window.TaskingSync.getComments(taskId);
@@ -3607,10 +3633,12 @@
     // задачу; тогда этот ответ уже не актуален и рисовать его не нужно.
     if (myToken !== commentsLoadToken || openTaskId !== taskId) return;
     if (!res || !res.ok) {
-      commentsList.innerHTML = `<div class="comments-empty">Не удалось загрузить обсуждение.</div>`;
+      if (!cached) commentsList.innerHTML = `<div class="comments-empty">Не удалось загрузить обсуждение.</div>`;
       return;
     }
-    renderComments(res.comments || []);
+    currentComments = res.comments || [];
+    commentsCacheByTask.set(taskId, currentComments);
+    renderComments(currentComments);
   }
 
   function readFileAsBase64(file) {
@@ -3666,24 +3694,48 @@
       }
     });
 
+    // Отправка "оптимистичная": сообщение сразу появляется в списке (со
+    // статусом "отправляется…"), не дожидаясь ответа Apps Script — сам
+    // запрос всё равно уходит и займёт секунду-две, но пользователю не
+    // приходится на это смотреть. Когда сервер ответит, временная запись
+    // заменяется настоящей (с его id) или, если не получилось, убирается
+    // обратно с ошибкой в тосте и возвращённым в поле текстом.
     commentForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const taskId = openTaskId;
       if (!taskId || !window.TaskingSync || !window.TaskingSync.saveComment) return;
       const text = commentText.value.trim();
-      if (!text && !pendingCommentFile) return;
-      commentSendBtn.disabled = true;
+      const file = pendingCommentFile;
+      if (!text && !file) return;
+
+      const session = window.TaskingAuth && window.TaskingAuth.getSession();
+      const myId = session && session.user && session.user.id;
+      const tempId = "pending-" + Math.random().toString(36).slice(2);
+      const optimistic = {
+        id: tempId, taskId, authorId: myId, text,
+        fileName: file ? file.name : "", fileSize: file ? file.size : "",
+        createdAt: Date.now(), _pending: true
+      };
+      currentComments.push(optimistic);
+      renderComments(currentComments);
+      commentText.value = "";
+      pendingCommentFile = null;
+      renderCommentFileChip();
+
       try {
-        const res = await window.TaskingSync.saveComment(taskId, text, pendingCommentFile);
+        const res = await window.TaskingSync.saveComment(taskId, text, file);
         if (!res || !res.ok) throw new Error((res && res.error) || "Не удалось отправить сообщение");
-        commentText.value = "";
-        pendingCommentFile = null;
-        renderCommentFileChip();
-        if (openTaskId === taskId) loadComments(taskId);
+        if (openTaskId !== taskId) return; // задачу уже закрыли/сменили, пока отправлялось
+        const idx = currentComments.findIndex((c) => c.id === tempId);
+        if (idx !== -1) currentComments[idx] = res.comment;
+        commentsCacheByTask.set(taskId, currentComments);
+        renderComments(currentComments);
       } catch (err) {
+        if (openTaskId !== taskId) return;
+        currentComments = currentComments.filter((c) => c.id !== tempId);
+        renderComments(currentComments);
+        commentText.value = text;
         showToast(err.message);
-      } finally {
-        commentSendBtn.disabled = false;
       }
     });
 
