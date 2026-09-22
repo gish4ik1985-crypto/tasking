@@ -725,6 +725,13 @@
   const depsAddSelect = document.getElementById("depsAddSelect");
   const conflictWarning = document.getElementById("conflictWarning");
   const dateOrderWarning = document.getElementById("dateOrderWarning");
+  const commentsList = document.getElementById("commentsList");
+  const commentForm = document.getElementById("commentForm");
+  const commentText = document.getElementById("commentText");
+  const commentAttachBtn = document.getElementById("commentAttachBtn");
+  const commentFileInput = document.getElementById("commentFileInput");
+  const commentFileChip = document.getElementById("commentFileChip");
+  const commentSendBtn = document.getElementById("commentSendBtn");
   const analyticsPanel = document.getElementById("analyticsPanel");
   const analyticsTitle = document.getElementById("analyticsTitle");
   const analyticsBody = document.getElementById("analyticsBody");
@@ -3276,6 +3283,7 @@
     renderSubtaskSection();
     renderDepsSection();
     renderConflictWarning();
+    loadComments(taskId);
 
     // Если задачу назначили на вас, но создал её кто-то другой — сервер
     // всё равно примет только "выполнено" и заметку (см. gas/Code.gs,
@@ -3488,6 +3496,132 @@
     return state.projects.find((p) => p.id === openTaskProjectId) || null;
   }
 
+  // ---------- Обсуждение задачи (чат + файлы) ----------
+  // В отличие от остального содержимого панели деталей, комментарии не
+  // хранятся в state/localStorage — это отдельный, всегда "живой" запрос
+  // к серверу (см. js/sync.js), поэтому здесь есть async-загрузка и
+  // отдельная обработка "панель уже закрыли/переключили, пока грузилось".
+  const MAX_COMMENT_FILE_BYTES = 10 * 1024 * 1024; // 10 МБ — совпадает с лимитом на сервере (gas/Code.gs)
+  let pendingCommentFile = null;
+  let commentsLoadToken = 0;
+
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} Б`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`;
+    return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
+  }
+
+  function formatCommentTime(ts) {
+    const d = new Date(Number(ts));
+    if (isNaN(d.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function renderCommentFileChip() {
+    if (!pendingCommentFile) {
+      commentFileChip.hidden = true;
+      commentFileChip.innerHTML = "";
+      return;
+    }
+    commentFileChip.hidden = false;
+    commentFileChip.innerHTML = `📎 ${escapeHtml(pendingCommentFile.name)} <button type="button" id="commentFileRemove" title="Убрать файл" aria-label="Убрать прикреплённый файл">×</button>`;
+    document.getElementById("commentFileRemove").addEventListener("click", () => {
+      pendingCommentFile = null;
+      renderCommentFileChip();
+    });
+  }
+
+  function renderComments(comments) {
+    const usersById = {};
+    state.users.forEach((u) => { usersById[u.id] = u; });
+    const session = window.TaskingAuth && window.TaskingAuth.getSession();
+    const myId = session && session.user && session.user.id;
+
+    commentsList.innerHTML = comments.length
+      ? comments.map((c) => {
+          const author = usersById[c.authorId];
+          const mine = !!myId && c.authorId === myId;
+          const fileHtml = c.fileUrl
+            ? `<a class="comment-file" href="${c.fileUrl}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(c.fileName || "файл")}${c.fileSize ? ` <span class="comment-file-size">(${formatFileSize(c.fileSize)})</span>` : ""}</a>`
+            : "";
+          return `
+            <div class="comment-row ${mine ? "mine" : ""}">
+              <div class="comment-bubble" style="--chip-color:${(author && author.color) || "#6d5dfc"}">
+                <div class="comment-meta">
+                  <span class="comment-author">${escapeHtml(author ? author.name : "?")}</span>
+                  <span class="comment-time">${formatCommentTime(c.createdAt)}</span>
+                </div>
+                ${c.text ? `<div class="comment-text">${escapeHtml(c.text)}</div>` : ""}
+                ${fileHtml}
+                ${mine ? `<button type="button" class="comment-delete" data-delete-comment="${c.id}" title="Удалить сообщение" aria-label="Удалить сообщение">×</button>` : ""}
+              </div>
+            </div>`;
+        }).join("")
+      : `<div class="comments-empty">Пока нет ни одного сообщения</div>`;
+    commentsList.scrollTop = commentsList.scrollHeight;
+
+    commentsList.querySelectorAll("[data-delete-comment]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const commentId = btn.dataset.deleteComment;
+        const taskId = openTaskId;
+        btn.disabled = true;
+        try {
+          const res = await window.TaskingSync.deleteComment(commentId);
+          if (!res || !res.ok) throw new Error((res && res.error) || "");
+          if (openTaskId === taskId) loadComments(taskId);
+        } catch (err) {
+          btn.disabled = false;
+          showToast(err.message || "Не удалось удалить сообщение");
+        }
+      });
+    });
+  }
+
+  // Подгружает обсуждение с сервера при открытии панели деталей. Если
+  // приложение работает без синхронизации (TaskingSync недоступен —
+  // например, в тестовом окружении) — просто прячет форму отправки:
+  // локально комментарии хранить негде и незачем.
+  async function loadComments(taskId) {
+    pendingCommentFile = null;
+    renderCommentFileChip();
+    commentText.value = "";
+
+    if (!window.TaskingSync || !window.TaskingSync.getComments) {
+      commentForm.hidden = true;
+      commentsList.innerHTML = `<div class="comments-empty">Обсуждение доступно только в синхронизированной версии приложения.</div>`;
+      return;
+    }
+    commentForm.hidden = false;
+
+    const myToken = ++commentsLoadToken;
+    commentsList.innerHTML = `<div class="comments-empty">Загрузка…</div>`;
+    let res;
+    try {
+      res = await window.TaskingSync.getComments(taskId);
+    } catch (err) {
+      res = { ok: false, error: String(err) };
+    }
+    // Пока грузилось — панель могли закрыть или переключить на другую
+    // задачу; тогда этот ответ уже не актуален и рисовать его не нужно.
+    if (myToken !== commentsLoadToken || openTaskId !== taskId) return;
+    if (!res || !res.ok) {
+      commentsList.innerHTML = `<div class="comments-empty">Не удалось загрузить обсуждение.</div>`;
+      return;
+    }
+    renderComments(res.comments || []);
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   // Навешивает обработчики один раз при запуске приложения на все поля
   // панели деталей: изменение любого поля сразу сохраняет значение в
   // задачу. Здесь же — кнопка авто/ручной режим дат и удаление задачи.
@@ -3511,6 +3645,46 @@
     // не detailPanel, а конкретный дочерний элемент).
     detailPanel.addEventListener("click", (e) => {
       if (e.target === detailPanel) closeDetail();
+    });
+
+    commentAttachBtn.addEventListener("click", () => commentFileInput.click());
+
+    commentFileInput.addEventListener("change", async () => {
+      const file = commentFileInput.files[0];
+      commentFileInput.value = "";
+      if (!file) return;
+      if (file.size > MAX_COMMENT_FILE_BYTES) {
+        showToast("Файл слишком большой (максимум 10 МБ)");
+        return;
+      }
+      try {
+        const dataBase64 = await readFileAsBase64(file);
+        pendingCommentFile = { name: file.name, mimeType: file.type || "application/octet-stream", size: file.size, dataBase64 };
+        renderCommentFileChip();
+      } catch (err) {
+        showToast(err.message || "Не удалось прочитать файл");
+      }
+    });
+
+    commentForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const taskId = openTaskId;
+      if (!taskId || !window.TaskingSync || !window.TaskingSync.saveComment) return;
+      const text = commentText.value.trim();
+      if (!text && !pendingCommentFile) return;
+      commentSendBtn.disabled = true;
+      try {
+        const res = await window.TaskingSync.saveComment(taskId, text, pendingCommentFile);
+        if (!res || !res.ok) throw new Error((res && res.error) || "Не удалось отправить сообщение");
+        commentText.value = "";
+        pendingCommentFile = null;
+        renderCommentFileChip();
+        if (openTaskId === taskId) loadComments(taskId);
+      } catch (err) {
+        showToast(err.message);
+      } finally {
+        commentSendBtn.disabled = false;
+      }
     });
 
     detailBreadcrumb.addEventListener("click", () => {

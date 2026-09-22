@@ -341,5 +341,25 @@
     api("markViewed", { taskId }).catch((e) => console.error("Не удалось отметить задачу просмотренной:", e));
   }
 
-  window.TaskingSync = { pull, push, markViewed, resetSnapshot, startPolling };
+  // ---------- Обсуждение задачи (чат) ----------
+  // В отличие от projects/sections/tasks, комментарии не хранятся в
+  // state/localStorage и не участвуют в push()/pull() — они подгружаются
+  // с сервера напрямую только пока открыта панель деталей конкретной
+  // задачи (см. loadComments в app.js), поэтому просто прокидывают вызов
+  // в api() и отдают ответ сервера как есть.
+  function getComments(taskId) {
+    return api("getComments", { taskId });
+  }
+
+  function saveComment(taskId, text, file) {
+    const payload = { taskId, text };
+    if (file) payload.file = { name: file.name, mimeType: file.mimeType, size: file.size, dataBase64: file.dataBase64 };
+    return api("saveComment", payload);
+  }
+
+  function deleteComment(commentId) {
+    return api("deleteComment", { commentId });
+  }
+
+  window.TaskingSync = { pull, push, markViewed, getComments, saveComment, deleteComment, resetSnapshot, startPolling };
 })();

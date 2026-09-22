@@ -8,7 +8,11 @@
  *
  * Один раз после создания таблицы: открыть этот скрипт в редакторе
  * (Расширения → Apps Script), выбрать функцию setup, нажать Run —
- * создаст листы Users/Sessions/Projects/Sections/Tasks/Views с шапками.
+ * создаст листы Users/Sessions/Projects/Sections/Tasks/Views/Comments
+ * с шапками. Файлы, прикреплённые к сообщениям в чате задачи, кладутся
+ * в отдельную папку Google Drive "Tasking Attachments" (создаётся сама
+ * при первой отправке файла) — сам скрипт должен иметь доступ к Drive
+ * (Apps Script спросит разрешение при первой такой отправке).
  *
  * Пользователей заводить вручную не нужно: при первом входе с новым
  * логином/паролем аккаунт создаётся автоматически (см. handleLogin).
@@ -45,8 +49,15 @@ var SHEET_PROJECTS = 'Projects';
 var SHEET_SECTIONS = 'Sections';
 var SHEET_TASKS = 'Tasks';
 var SHEET_VIEWS = 'Views';
+var SHEET_COMMENTS = 'Comments';
 
 var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
+
+// Файлы, приложенные к сообщениям в чате задачи, кладутся в Google Drive
+// (тот же аккаунт, что и сама таблица) — Sheets для бинарных файлов не
+// годится (лимит ~50к символов в ячейке). В Comments хранится только
+// ссылка/метаданные, само содержимое — в Drive.
+var MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 МБ
 
 var SCHEMAS = {};
 SCHEMAS[SHEET_USERS] = ['id', 'login', 'passwordHash', 'name', 'color', 'weeklyHours', 'visibleViews', 'isAdmin'];
@@ -57,6 +68,7 @@ SCHEMAS[SHEET_TASKS] = ['id', 'projectId', 'sectionId', 'parentTaskId', 'title',
   'priority', 'completed', 'startDate', 'dueDate', 'datesAuto', 'estimateHours', 'order', 'tags', 'dependencies', 'archived',
   'createdAt', 'updatedAt'];
 SCHEMAS[SHEET_VIEWS] = ['userId', 'taskId', 'viewedAt'];
+SCHEMAS[SHEET_COMMENTS] = ['id', 'taskId', 'authorId', 'text', 'fileName', 'fileMimeType', 'fileSize', 'fileId', 'fileUrl', 'createdAt'];
 
 // Поля задачи, которые разрешено менять не-создателю, если задача
 // назначена на него (assigneeId === userId).
@@ -95,7 +107,8 @@ function doGet(e) {
 // Чтения (getState/listUsers/whoAmI) в неё не берём, чтобы не тормозить
 // параллельную работу нескольких людей без необходимости.
 var WRITE_ACTIONS = ['login', 'updateProfile', 'createStarterProject', 'saveProject', 'saveSection', 'saveTask',
-  'deleteTask', 'deleteProject', 'deleteSection', 'markViewed', 'adminUpdateUser', 'adminDeleteUser'];
+  'deleteTask', 'deleteProject', 'deleteSection', 'markViewed', 'adminUpdateUser', 'adminDeleteUser',
+  'saveComment', 'deleteComment'];
 
 function doPost(e) {
   var body = {};
@@ -143,6 +156,9 @@ function route(action, body) {
     case 'markViewed': return handleMarkViewed(userId, body.taskId);
     case 'adminUpdateUser': return handleAdminUpdateUser(userId, body.targetUserId, body.patch);
     case 'adminDeleteUser': return handleAdminDeleteUser(userId, body.targetUserId);
+    case 'getComments': return handleGetComments(userId, body.taskId);
+    case 'saveComment': return handleSaveComment(userId, body);
+    case 'deleteComment': return handleDeleteComment(userId, body.commentId);
     default: return { ok: false, error: 'unknown action' };
   }
 }
@@ -552,7 +568,22 @@ function handleDeleteTask(userId, taskId) {
     });
   }
   deleteRowsWhere(SHEET_TASKS, function (r) { return !!idsToDelete[r.id]; });
+  deleteCommentsForTasks(idsToDelete);
   return { ok: true };
+}
+
+// Удаляет строки Comments (и приложенные к ним файлы в Drive) для всех
+// задач из idsToDelete — иначе после удаления задачи в Drive навсегда
+// остаются "осиротевшие" файлы, на которые уже никто и никогда не
+// сможет сослаться из интерфейса.
+function deleteCommentsForTasks(idsToDelete) {
+  var comments = readRows(SHEET_COMMENTS).filter(function (c) { return !!idsToDelete[c.taskId]; });
+  comments.forEach(function (c) {
+    if (c.fileId) {
+      try { DriveApp.getFileById(c.fileId).setTrashed(true); } catch (e) { /* файл уже удалён вручную — не страшно */ }
+    }
+  });
+  deleteRowsWhere(SHEET_COMMENTS, function (r) { return !!idsToDelete[r.taskId]; });
 }
 
 function handleDeleteProject(userId, projectId) {
@@ -563,8 +594,11 @@ function handleDeleteProject(userId, projectId) {
   // Каскад: разделы и задачи внутри проекта удаляем вместе с ним, даже
   // если некоторые задачи создал не сам автор проекта (см. модель прав) —
   // проект целиком в его власти.
+  var idsToDelete = {};
+  readRows(SHEET_TASKS).forEach(function (t) { if (t.projectId === projectId) idsToDelete[t.id] = true; });
   deleteRowsWhere(SHEET_SECTIONS, function (r) { return r.projectId === projectId; });
   deleteRowsWhere(SHEET_TASKS, function (r) { return r.projectId === projectId; });
+  deleteCommentsForTasks(idsToDelete);
   deleteRow(SHEET_PROJECTS, projectId);
   return { ok: true };
 }
@@ -590,6 +624,96 @@ function handleMarkViewed(userId, taskId) {
   } else {
     appendRow(SHEET_VIEWS, { userId: userId, taskId: taskId, viewedAt: Date.now() });
   }
+  return { ok: true };
+}
+
+// ---------- Обсуждение задачи (чат) ----------
+
+// Кто вообще может видеть/писать в чат задачи — то же самое, что и модель
+// видимости задач в handleGetState (создатель/исполнитель/наблюдатель/
+// участник проекта/админ), но без цепочки родитель-подзадача — обсуждение
+// имеет смысл только для тех, кто и так прямо связан с этой конкретной
+// задачей.
+function canAccessTask(userId, task) {
+  if (isUserAdmin(userId)) return true;
+  if (task.creatorId === userId || task.assigneeId === userId) return true;
+  if (safeJson(task.watchers, []).indexOf(userId) !== -1) return true;
+  var project = findRow(SHEET_PROJECTS, task.projectId);
+  if (project && (project.creatorId === userId || safeJson(project.members, []).indexOf(userId) !== -1)) return true;
+  return false;
+}
+
+function handleGetComments(userId, taskId) {
+  var task = taskId ? findRow(SHEET_TASKS, taskId) : null;
+  if (!task) return { ok: false, error: 'Задача не найдена' };
+  if (!canAccessTask(userId, task)) return { ok: false, error: 'Нет доступа к этой задаче' };
+  var comments = readRows(SHEET_COMMENTS).filter(function (c) { return c.taskId === taskId; });
+  comments.sort(function (a, b) { return Number(a.createdAt) - Number(b.createdAt); });
+  return { ok: true, comments: comments };
+}
+
+// Папка в Drive, куда складываются все файлы, прикреплённые к сообщениям.
+// Id папки кэшируется в Script Properties, чтобы не искать её по имени
+// на каждой отправке файла.
+function getAttachmentsFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty('ATTACHMENTS_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* папку удалили вручную — создадим заново ниже */ }
+  }
+  var existing = DriveApp.getFoldersByName('Tasking Attachments');
+  var folder = existing.hasNext() ? existing.next() : DriveApp.createFolder('Tasking Attachments');
+  props.setProperty('ATTACHMENTS_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function handleSaveComment(userId, body) {
+  var taskId = body.taskId;
+  var task = taskId ? findRow(SHEET_TASKS, taskId) : null;
+  if (!task) return { ok: false, error: 'Задача не найдена' };
+  if (!canAccessTask(userId, task)) return { ok: false, error: 'Нет доступа к этой задаче' };
+
+  var text = String(body.text || '').trim();
+  var file = body.file;
+  if (!text && !file) return { ok: false, error: 'Пустое сообщение' };
+
+  var comment = { id: Utilities.getUuid(), taskId: taskId, authorId: userId, text: text, createdAt: Date.now() };
+
+  if (file && file.dataBase64) {
+    var declaredSize = Number(file.size) || 0;
+    if (declaredSize > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'Файл слишком большой (максимум 10 МБ)' };
+    try {
+      var bytes = Utilities.base64Decode(file.dataBase64);
+      if (bytes.length > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'Файл слишком большой (максимум 10 МБ)' };
+      var blob = Utilities.newBlob(bytes, file.mimeType || 'application/octet-stream', file.name || 'file');
+      var driveFile = getAttachmentsFolder().createFile(blob);
+      // Доступ по ссылке — без него получатель ссылки (свои же коллеги по
+      // задаче) не сможет открыть файл, т.к. по умолчанию Drive-файл виден
+      // только тому, под чьим аккаунтом выполняется скрипт.
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      comment.fileName = file.name || driveFile.getName();
+      comment.fileMimeType = file.mimeType || blob.getContentType() || '';
+      comment.fileSize = bytes.length;
+      comment.fileId = driveFile.getId();
+      comment.fileUrl = 'https://drive.google.com/uc?id=' + driveFile.getId() + '&export=download';
+    } catch (err) {
+      return { ok: false, error: 'Не удалось загрузить файл: ' + err };
+    }
+  }
+
+  appendRow(SHEET_COMMENTS, comment);
+  return { ok: true, comment: comment };
+}
+
+function handleDeleteComment(userId, commentId) {
+  if (!commentId) return { ok: false, error: 'нет commentId' };
+  var existing = findRow(SHEET_COMMENTS, commentId);
+  if (!existing) return { ok: true }; // уже удалено — считаем успехом
+  if (existing.authorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Удалить можно только своё сообщение' };
+  if (existing.fileId) {
+    try { DriveApp.getFileById(existing.fileId).setTrashed(true); } catch (e) { /* файл уже удалён вручную */ }
+  }
+  deleteRow(SHEET_COMMENTS, commentId);
   return { ok: true };
 }
 

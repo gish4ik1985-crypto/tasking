@@ -1052,6 +1052,143 @@ body {
 }
 #depsAddSelect:focus { border-color: var(--accent); background: #fff; }
 
+/* Обсуждение задачи (чат + файлы) — тот же паттерн заголовков/отступов,
+   что и у подзадач/зависимостей выше */
+.detail-comments-wrap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 2px;
+  margin-bottom: 8px;
+}
+.comments-empty { font-size: 12px; color: var(--text-faint); padding: 4px; }
+.comment-row { display: flex; }
+.comment-row.mine { justify-content: flex-end; }
+.comment-bubble {
+  position: relative;
+  max-width: 85%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--chip-color, var(--accent));
+  font-size: 13px;
+}
+.comment-row.mine .comment-bubble {
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 10%, var(--panel));
+  border-left: none;
+  border-right: 3px solid var(--chip-color, var(--accent));
+}
+.comment-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.comment-author { font-weight: 600; font-size: 12px; color: var(--text); }
+.comment-time { font-size: 10.5px; color: var(--text-faint); }
+.comment-text { white-space: pre-wrap; word-break: break-word; line-height: 1.35; }
+.comment-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent-hover);
+  text-decoration: none;
+}
+.comment-file:hover { text-decoration: underline; }
+.comment-file-size { color: var(--text-faint); }
+.comment-delete {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 50%;
+}
+.comment-row.mine .comment-delete { right: auto; left: 4px; }
+.comment-delete:hover { background: rgba(0, 0, 0, 0.08); color: var(--danger); }
+.comment-delete:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.comment-form { display: flex; flex-direction: column; gap: 6px; }
+.comment-form textarea {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  outline: none;
+  resize: vertical;
+}
+.comment-form textarea:focus { border-color: var(--accent); background: #fff; }
+.comment-form[hidden] { display: none; }
+.comment-form-row { display: flex; align-items: center; gap: 8px; }
+.comment-attach-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.comment-attach-btn:hover { border-color: var(--accent); color: var(--accent-hover); }
+.comment-file-chip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.comment-file-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.comment-file-chip button:hover { color: var(--danger); }
+.comment-send-btn {
+  margin-left: auto;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.comment-send-btn:hover { background: var(--accent-hover); }
+.comment-send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Предупреждение о занятости исполнителя в панели деталей */
 .conflict-warning {
   margin: -6px 0 14px;

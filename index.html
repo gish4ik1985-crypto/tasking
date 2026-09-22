@@ -230,6 +230,23 @@
                 <option value="">+ Добавить зависимость...</option>
               </select>
             </div>
+
+            <!-- Обсуждение задачи: подгружается с сервера отдельно от
+                 основного состояния, только пока открыта эта панель
+                 (см. loadComments в app.js) -->
+            <div class="detail-comments-wrap">
+              <label>Обсуждение</label>
+              <div class="comments-list" id="commentsList"></div>
+              <form class="comment-form" id="commentForm" hidden>
+                <textarea id="commentText" rows="2" placeholder="Написать сообщение..."></textarea>
+                <div class="comment-form-row">
+                  <button type="button" class="comment-attach-btn" id="commentAttachBtn" title="Прикрепить файл" aria-label="Прикрепить файл">📎</button>
+                  <input type="file" id="commentFileInput" hidden>
+                  <span class="comment-file-chip" id="commentFileChip" hidden></span>
+                  <button type="submit" class="comment-send-btn" id="commentSendBtn">Отправить</button>
+                </div>
+              </form>
+            </div>
           </div>
 
           <div class="detail-col-meta">
