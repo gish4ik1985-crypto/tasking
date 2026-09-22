@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Задачник</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Вся разметка статична и почти пустая — реальным содержимым (карточки,
+     строки, список проектов и т.п.) все блоки ниже заполняет js/app.js.
+     Здесь только "рамки" (контейнеры) и элементы управления. -->
+<div class="app">
+
+  <!-- Боковая панель слева: ссылки на Дашборд и Люди + дерево проектов -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <span class="brand-mark">T</span>
+        <span class="brand-name">Tasking</span>
+      </div>
+    </div>
+
+    <button class="nav-dashboard" id="dashboardNavBtn">
+      <span class="nav-dashboard-icon">◧</span> Дашборд
+    </button>
+    <button class="nav-dashboard" id="peopleNavBtn">
+      <span class="nav-dashboard-icon">☺</span> Люди
+    </button>
+    <button class="nav-dashboard" id="trashNavBtn">
+      <span class="nav-dashboard-icon">🗑</span> Корзина<span class="nav-trash-count" id="trashCount" hidden aria-live="polite"></span>
+    </button>
+    <button class="nav-dashboard" id="archiveNavBtn">
+      <span class="nav-dashboard-icon">🗄</span> Архив<span class="nav-trash-count" id="archiveCount" hidden aria-live="polite"></span>
+    </button>
+
+    <div class="sidebar-section-label">Проекты</div>
+
+    <button class="btn-add-project" id="addProjectBtn">
+      <span class="icon-plus">+</span> Новый проект
+    </button>
+    <div class="add-project-inline" id="addProjectInline" hidden>
+      <input type="text" id="addProjectInput" placeholder="Название проекта">
+    </div>
+
+    <nav class="project-list" id="projectList"></nav>
+
+    <div class="sidebar-bottom">
+      <label class="toggle-completed">
+        <input type="checkbox" id="showCompletedToggle" checked>
+        <span>Показывать выполненные</span>
+      </label>
+      <div class="sidebar-data-actions">
+        <button class="btn-data-action" id="exportDataBtn" title="Сохранить все данные в JSON-файл">⬇ Экспорт</button>
+        <button class="btn-data-action" id="importDataBtn" title="Загрузить данные из ранее сохранённого JSON-файла">⬆ Импорт</button>
+        <input type="file" id="importDataInput" accept="application/json" hidden>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Основная область: верхняя панель + один из блоков ниже (видимый
+       определяется в app.js через атрибут hidden в зависимости от
+       текущего экрана/вида) -->
+  <main class="main">
+    <header class="topbar" id="topbar">
+      <div class="topbar-left">
+        <span class="project-dot" id="currentProjectDot"></span>
+        <h1 class="project-title" id="projectTitle" contenteditable="true" spellcheck="false"></h1>
+      </div>
+
+      <div class="topbar-right">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Поиск задач...">
+        </div>
+        <div class="filter-box">
+          <button class="btn-filter" id="filterToggleBtn" title="Фильтры">⚙ Фильтры<span class="filter-count" id="filterCount" hidden></span></button>
+          <div class="filter-panel" id="filterPanel" hidden>
+            <div class="filter-field">
+              <label>Исполнитель</label>
+              <select id="filterAssignee">
+                <option value="">Любой</option>
+                <option value="none">Без исполнителя</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Приоритет</label>
+              <select id="filterPriority">
+                <option value="">Любой</option>
+                <option value="high">Высокий</option>
+                <option value="medium">Средний</option>
+                <option value="low">Низкий</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Срок</label>
+              <select id="filterDue">
+                <option value="">Любой</option>
+                <option value="overdue">Просрочено</option>
+                <option value="week">На этой неделе</option>
+                <option value="none">Без срока</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Тег</label>
+              <select id="filterTag">
+                <option value="">Любой</option>
+              </select>
+            </div>
+            <button class="filter-reset-btn" id="filterResetBtn">Сбросить фильтры</button>
+          </div>
+        </div>
+        <button class="btn-filter" id="archiveCompletedBtn" title="Убрать все выполненные задачи этого проекта из обычных видов в архив">🗄 В архив</button>
+        <div class="view-switch" id="viewSwitch">
+          <button class="view-btn active" data-view="board">Доска</button>
+          <button class="view-btn" data-view="list">Список</button>
+          <button class="view-btn" data-view="tree">По статусам</button>
+          <button class="view-btn" data-view="structure">Структура</button>
+          <button class="view-btn" data-view="gantt">Гант</button>
+        </div>
+        <button class="btn-delete-project" id="deleteProjectBtn" title="Удалить проект" aria-label="Удалить проект">🗑</button>
+      </div>
+    </header>
+
+    <!-- вид "Доска" (канбан) -->
+    <div class="board-wrap" id="boardWrap">
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- вид "Список" -->
+    <div class="list-wrap" id="listWrap" hidden>
+      <div class="list" id="list"></div>
+    </div>
+
+    <!-- виды "По статусам" и "Структура" — рисуются в один и тот же контейнер -->
+    <div class="tree-wrap" id="treeWrap" hidden>
+      <div class="tree-toolbar">
+        <button class="tree-collapse-btn" id="treeCollapseAllBtn" title="Свернуть все ветки с подзадачами">⊟ Свернуть всё</button>
+        <button class="tree-collapse-btn" id="treeExpandAllBtn" title="Развернуть все ветки">⊞ Развернуть всё</button>
+      </div>
+      <div class="tree-scroll">
+        <div class="tree" id="tree"></div>
+      </div>
+    </div>
+
+    <!-- вид "Гант" -->
+    <div class="gantt-wrap" id="ganttWrap" hidden>
+      <div class="gantt-toolbar">
+        <button class="tree-collapse-btn" id="ganttCollapseAllBtn" title="Свернуть все ветки с подзадачами">⊟ Свернуть всё</button>
+        <button class="tree-collapse-btn" id="ganttExpandAllBtn" title="Развернуть все ветки">⊞ Развернуть всё</button>
+        <span class="gantt-toolbar-sep"></span>
+        <span class="gantt-toolbar-label">Масштаб</span>
+        <button class="gantt-zoom-btn" id="ganttZoomOutBtn" title="Уменьшить масштаб" aria-label="Уменьшить масштаб">−</button>
+        <input type="range" id="ganttZoomSlider" min="6" max="60" step="2" aria-label="Масштаб диаграммы Ганта">
+        <button class="gantt-zoom-btn" id="ganttZoomInBtn" title="Увеличить масштаб" aria-label="Увеличить масштаб">+</button>
+        <span class="gantt-zoom-value" id="ganttZoomValue"></span>
+      </div>
+      <div class="gantt-scroll">
+        <div class="gantt" id="gantt"></div>
+      </div>
+    </div>
+
+    <!-- экран "Дашборд" (не привязан к одному проекту) -->
+    <div class="dashboard-wrap" id="dashboardWrap" hidden>
+      <div class="dashboard" id="dashboard"></div>
+    </div>
+
+    <!-- экран "Люди" — справочник исполнителей (тоже не привязан к проекту) -->
+    <div class="people-wrap" id="peopleWrap" hidden>
+      <div class="people" id="people"></div>
+    </div>
+
+    <!-- экран "Корзина" — удалённые задачи, которые можно восстановить -->
+    <div class="trash-wrap" id="trashWrap" hidden>
+      <div class="trash" id="trash"></div>
+    </div>
+
+    <!-- экран "Архив" — выполненные задачи, убранные из обычных видов -->
+    <div class="trash-wrap" id="archiveWrap" hidden>
+      <div class="trash" id="archive"></div>
+    </div>
+  </main>
+
+  <!-- Панель деталей открытой задачи — большое модальное окно по центру
+       экрана поверх затемнённого фона (клик по фону тоже закрывает его) -->
+  <div class="detail-overlay" id="detailPanel" hidden>
+    <div class="detail-modal" role="dialog" aria-modal="true" aria-label="Детали задачи">
+      <div class="detail-header">
+        <button class="detail-complete" id="detailComplete" title="Отметить выполненной" aria-label="Отметить выполненной" aria-pressed="false"></button>
+        <button class="detail-close" id="detailClose" title="Закрыть" aria-label="Закрыть">×</button>
+      </div>
+      <div class="detail-body">
+        <div class="detail-breadcrumb" id="detailBreadcrumb" hidden></div>
+
+        <textarea class="detail-title" id="detailTitle" rows="1" placeholder="Название задачи"></textarea>
+
+        <!-- Две колонки: слева — содержание (заметки, подзадачи), справа —
+             компактная карточка со всеми служебными полями -->
+        <div class="detail-columns">
+          <div class="detail-col-main">
+            <div class="detail-notes-wrap">
+              <label>Заметки</label>
+              <textarea class="detail-notes" id="detailNotes" rows="6" placeholder="Описание, детали..."></textarea>
+            </div>
+
+            <div class="detail-subtasks-wrap">
+              <label>Подзадачи <span id="subtaskProgress" class="subtask-progress"></span></label>
+              <div class="subtask-list" id="subtaskList"></div>
+              <div class="inline-add-row" id="subtaskAddRow">
+                <input type="text" class="inline-add-input" id="subtaskAddInput" placeholder="+ Добавить подзадачу...">
+              </div>
+            </div>
+
+            <!-- Связи "сначала выполнить": задача не должна начинаться раньше,
+                 чем закончатся выбранные здесь предшественники (как в MS Project) -->
+            <div class="detail-deps-wrap">
+              <label>Сначала выполнить</label>
+              <div class="deps-list" id="depsList"></div>
+              <select id="depsAddSelect">
+                <option value="">+ Добавить зависимость...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="detail-col-meta">
+            <div class="detail-field">
+              <label>Раздел</label>
+              <select id="detailSection"></select>
+            </div>
+
+            <div class="detail-field">
+              <label>Исполнитель</label>
+              <select id="detailAssignee"></select>
+            </div>
+
+            <!-- Предупреждение, что у исполнителя в эти же даты уже есть
+                 другая незавершённая задача -->
+            <div class="conflict-warning" id="conflictWarning" hidden></div>
+
+            <div class="detail-field">
+              <label>Начало</label>
+              <input type="date" id="detailStart">
+            </div>
+
+            <div class="detail-field">
+              <label>Срок</label>
+              <input type="date" id="detailDue">
+            </div>
+
+            <!-- Предупреждение, что срок раньше начала -->
+            <div class="conflict-warning" id="dateOrderWarning" hidden></div>
+
+            <!-- Показывается только у задач с подзадачами: сообщает, что даты
+                 выше вычислены автоматически (или заданы вручную), и позволяет
+                 переключить режим -->
+            <div class="dates-auto-row" id="datesAutoRow" hidden>
+              <span id="datesAutoText"></span>
+              <button type="button" id="datesAutoToggleBtn"></button>
+            </div>
+
+            <div class="detail-field">
+              <label>Приоритет</label>
+              <select id="detailPriority">
+                <option value="low">Низкий</option>
+                <option value="medium">Средний</option>
+                <option value="high">Высокий</option>
+              </select>
+            </div>
+
+            <div class="detail-field">
+              <label>Оценка, ч</label>
+              <input type="number" id="detailEstimate" min="0" step="0.5" placeholder="напр. 4">
+            </div>
+
+            <div class="detail-field">
+              <label>Теги</label>
+              <div class="detail-auto-tags" id="detailAutoTags"></div>
+              <input type="text" id="detailTags" placeholder="через запятую">
+            </div>
+
+            <button class="btn-delete-task" id="detailDelete">Удалить задачу</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Своё модальное окно вместо браузерных alert()/confirm() — app.js
+       заполняет текст и кнопки перед показом -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal-box" role="alertdialog" aria-modal="true" aria-describedby="modalMessage">
+      <p class="modal-message" id="modalMessage"></p>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <!-- Окно аналитики по проекту — содержимое целиком строит js/analytics.js -->
+  <div class="analytics-overlay" id="analyticsPanel" hidden>
+    <div class="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="analyticsTitle">
+      <div class="analytics-header">
+        <div class="analytics-title" id="analyticsTitle"></div>
+        <button class="detail-close" id="analyticsClose" title="Закрыть" aria-label="Закрыть">×</button>
+      </div>
+      <div class="analytics-body" id="analyticsBody"></div>
+    </div>
+  </div>
+
+  <!-- Всплывающее уведомление внизу экрана (например, "Задача удалена —
+       Отменить") — не блокирует страницу, само скрывается через несколько
+       секунд. role="status"/aria-live, чтобы скринридер озвучивал его
+       появление сам, без необходимости переводить на него фокус. -->
+  <div class="toast" id="toast" hidden role="status" aria-live="polite">
+    <span class="toast-message" id="toastMessage"></span>
+    <button class="toast-undo" id="toastUndoBtn" hidden>Отменить</button>
+  </div>
+
+  <!-- Командная палитра (Ctrl+K / Cmd+K) — быстрый поиск задач по ВСЕМ
+       проектам сразу (обычный поиск в топбаре ищет только в открытом
+       проекте) и несколько частых команд (перейти к проекту, сменить вид
+       и т.п.). Список строится и перерисовывается в app.js. -->
+  <div class="palette-overlay" id="paletteOverlay" hidden>
+    <div class="palette-modal" role="dialog" aria-modal="true" aria-label="Командная палитра">
+      <input type="text" class="palette-input" id="paletteInput" placeholder="Поиск задач по всем проектам, переход к проекту, смена вида..." autocomplete="off">
+      <div class="palette-results" id="paletteResults"></div>
+      <div class="palette-hint">↑↓ выбрать · Enter открыть · Esc закрыть</div>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

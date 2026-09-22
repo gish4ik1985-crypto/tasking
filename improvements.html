@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasking — что улучшить</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f7f6fb; --panel:#fff; --panel-2:#fcfbff; --border:#e6e4f0;
+  --text:#22212b; --dim:#63607a; --faint:#847fa0;
+  --accent:#6d5dfc; --accent-soft:#efecff;
+  --crit:#c62828; --crit-soft:#fdecea;
+  --high:#d1463b; --high-soft:#fdeceb;
+  --med:#a9741a; --med-soft:#fbf1de;
+  --low:#1e8a61; --low-soft:#e6f8f0;
+  --radius:12px;
+  --shadow:0 1px 3px rgba(30,20,60,.06),0 1px 2px rgba(30,20,60,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#15141a; --panel:#1e1d26; --panel-2:#23222c; --border:#332f42;
+    --text:#eceaf5; --dim:#aaa5c2; --faint:#8b86a8;
+    --accent:#8f83ff; --accent-soft:#2a2540;
+    --crit:#ff8378; --crit-soft:#3a1f1d;
+    --high:#ff9084; --high-soft:#37211f;
+    --med:#f0c069; --med-soft:#332a17;
+    --low:#5fd7a6; --low-soft:#152e26;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.55;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:32px 20px 90px}
+
+.hero h1{font-size:30px; margin:0 0 6px; letter-spacing:-.3px}
+.hero p{margin:0; color:var(--dim); max-width:80ch}
+.facts{display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 4px}
+.fact{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:9px 14px; box-shadow:var(--shadow)}
+.fact b{display:block; font-size:18px}
+.fact span{font-size:12px; color:var(--faint)}
+
+.toolbar{
+  position:sticky; top:0; z-index:5; background:var(--bg);
+  padding:16px 0 12px; border-bottom:1px solid var(--border); margin:22px 0;
+}
+.chips{display:flex; flex-wrap:wrap; gap:7px; align-items:center}
+.chip{
+  border:1px solid var(--border); background:var(--panel); color:var(--dim);
+  border-radius:999px; padding:5px 12px; font-size:13px; cursor:pointer; font-family:inherit;
+}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent); border-color:var(--accent); color:#fff}
+.chip .n{opacity:.65; margin-left:5px; font-size:11px}
+.tools{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center}
+.tools input[type=search]{
+  flex:1; min-width:220px; padding:8px 12px; border-radius:9px;
+  border:1px solid var(--border); background:var(--panel); color:var(--text);
+  font-size:14px; font-family:inherit;
+}
+.tools .reset{
+  border:1px solid var(--border); background:var(--panel); color:var(--dim);
+  border-radius:9px; padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit;
+}
+.tools .reset:hover{border-color:var(--accent); color:var(--accent)}
+
+h2.sec{
+  font-size:13px; text-transform:uppercase; letter-spacing:.09em; color:var(--faint);
+  margin:34px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+}
+h2.sec .cnt{text-transform:none; letter-spacing:0; font-weight:400; flex:none}
+.sec-note{font-size:13px; color:var(--dim); margin:-4px 0 14px; text-transform:none; letter-spacing:0}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(345px,1fr)); gap:14px}
+.card{
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:9px;
+}
+.card.picked{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft),var(--shadow)}
+.card-top{display:flex; gap:10px; align-items:flex-start}
+.card-top input{margin:4px 0 0; width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex:none}
+.card h3{margin:0; font-size:15px; line-height:1.35; flex:1}
+.badges{display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+.b{font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; white-space:nowrap}
+.b-crit{background:var(--crit-soft); color:var(--crit)}
+.b-high{background:var(--high-soft); color:var(--high)}
+.b-med{background:var(--med-soft); color:var(--med)}
+.b-low{background:var(--low-soft); color:var(--low)}
+.b-eff{background:var(--panel-2); color:var(--dim); border:1px solid var(--border)}
+.b-id{font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--faint); font-size:11px; font-weight:400}
+.card p{margin:0; color:var(--dim); font-size:13.5px}
+.card p.how{color:var(--text)}
+.card p.how b{color:var(--accent); font-weight:600}
+.where{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; color:var(--faint); overflow-wrap:anywhere}
+
+.road{display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:14px}
+.stage{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow)}
+.stage h3{margin:0 0 4px; font-size:16px}
+.stage .when{font-size:12px; color:var(--faint); margin-bottom:10px}
+.stage ol{margin:0; padding-left:20px; color:var(--dim); font-size:13.5px}
+.stage li{margin-bottom:5px}
+.stage li b{color:var(--text); font-weight:600}
+
+.bar{
+  position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:20;
+  background:var(--panel); border:1px solid var(--accent); border-radius:999px;
+  box-shadow:0 12px 32px rgba(30,20,60,.20); padding:9px 10px 9px 18px;
+  display:flex; gap:10px; align-items:center; font-size:13px;
+}
+.bar[hidden]{display:none!important}
+.bar button{border:none; background:var(--accent); color:#fff; border-radius:999px; padding:7px 14px; font-size:13px; cursor:pointer; font-family:inherit}
+.bar button.ghost{background:transparent; color:var(--dim)}
+.empty{color:var(--faint); padding:24px 0}
+footer{margin-top:44px; padding-top:18px; border-top:1px solid var(--border); color:var(--faint); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <h1>Tasking — идеи по улучшению</h1>
+  <p>Разбор текущего кода (<span class="where">index.html</span>, <span class="where">js/app.js</span>, <span class="where">js/analytics.js</span>, <span class="where">style.css</span>): что починить, что ускорить, что сделать удобнее и что можно добавить нового. Отметьте галочками то, что берём в работу, и нажмите «Скопировать план» — получится готовый список задач в Markdown. Выбор сохраняется в браузере.</p>
+  <div class="facts">
+    <div class="fact"><b>5 335</b><span>строк кода всего</span></div>
+    <div class="fact"><b>3 031</b><span>строка в js/app.js (154 КБ)</span></div>
+    <div class="fact"><b>0</b><span>тестов, сборки, линтера</span></div>
+    <div class="fact"><b>localStorage</b><span>единственное хранилище</span></div>
+    <div class="fact"><b>5</b><span>видов: доска, список, статусы, структура, Гант</span></div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="chips" id="catChips"></div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Поиск по идеям: «гант», «даты», «localStorage»…">
+    <div class="chips" id="prioChips"></div>
+    <button class="reset" id="resetBtn">Сбросить фильтры</button>
+  </div>
+</div>
+
+<div id="out"></div>
+
+<h2 class="sec">Дорожная карта <span class="cnt">предлагаемый порядок работ</span></h2>
+<div class="road">
+  <div class="stage">
+    <h3>Этап 1. Гигиена</h3>
+    <div class="when">1–2 дня · ничего не переписываем, убираем боль</div>
+    <ol>
+      <li><b>Даты в локальном времени</b> вместо UTC — B1</li>
+      <li><b>Защита сохранения</b>: try/catch, лимит корзины, предупреждение о переполнении — B2</li>
+      <li><b>Debounce</b> поиска и записи в localStorage — P1, P4</li>
+      <li><b>Undo</b> удаления + тост «Отменить» — U2</li>
+      <li><b>Чекбокс «выполнено» на карточке доски</b> — U1</li>
+      <li><b>Экспорт/импорт JSON</b> и кнопка «сбросить к демо» — U11</li>
+      <li><b>Синхронизация вкладок</b> через событие storage — B3</li>
+    </ol>
+  </div>
+  <div class="stage">
+    <h3>Этап 2. Каркас</h3>
+    <div class="when">3–5 дней · чтобы дальше фичи делались быстро</div>
+    <ol>
+      <li><b>Разбить app.js на ES-модули</b> — A1</li>
+      <li><b>Единая mutate()</b>: сохранение + точечный ре-рендер через rAF — A2, P1</li>
+      <li><b>Индексы и мемоизация</b> подзадач и эффективных дат — P2, A3</li>
+      <li><b>Делегирование событий</b> вместо перевешивания слушателей — P1</li>
+      <li><b>Роутинг по URL</b>: ссылка на задачу, кнопка «назад» — A8</li>
+      <li><b>Vitest</b> на чистую логику + ESLint/Prettier — A4, A5</li>
+      <li><b>Версия схемы и миграции</b> состояния — B12</li>
+    </ol>
+  </div>
+  <div class="stage">
+    <h3>Этап 3. Фичи</h3>
+    <div class="when">по выбору · то, что видит пользователь</div>
+    <ol>
+      <li><b>Гант «как в MS Project»</b>: тянуть полосы, стрелки связей, критический путь — U6, F1</li>
+      <li><b>Фильтры и представления</b> + палитра команд Ctrl+K — U3, U4</li>
+      <li><b>«Сегодня» / «Моя неделя»</b> и календарь — F18</li>
+      <li><b>Учёт времени</b>: факт vs оценка, burndown — F4</li>
+      <li><b>Комментарии и история</b> задачи — F9</li>
+      <li><b>PWA</b>: офлайн, установка, уведомления о сроках — F16</li>
+      <li><b>Синхронизация</b> и многопользовательский режим — F10</li>
+    </ol>
+  </div>
+</div>
+
+<footer>
+  Отчёт по состоянию кода на 3 сентября 2026 г. Ссылки вида <span class="where">js/app.js:162</span> — файл и строка, где смотреть.
+</footer>
+</div>
+
+<div class="bar" id="bar" hidden>
+  <span id="barText"></span>
+  <button id="copyBtn">Скопировать план</button>
+  <button class="ghost" id="clearBtn">Снять всё</button>
+</div>
+
+<script>
+const CATS = [
+  { key:"bug",  name:"Баги и риски",        note:"Найдено при чтении кода — это не «хотелки», а места, где приложение уже ведёт себя неверно или может потерять данные." },
+  { key:"perf", name:"Производительность",  note:"Сейчас всё работает быстро на демо-данных. Проблемы начнутся на 300–500 задачах и длинных диапазонах в Ганте." },
+  { key:"arch", name:"Архитектура и код",   note:"app.js — 3031 строка в одной IIFE. Пока читаемо благодаря комментариям, но каждая новая фича будет стоить дороже предыдущей." },
+  { key:"ux",   name:"Удобство (UX)",       note:"То, что чувствуется руками: чего не хватает в ежедневной работе с задачами." },
+  { key:"a11y", name:"Доступность и мелочи",note:"Клавиатура, скринридеры, контраст, локализация." },
+  { key:"feat", name:"Новые возможности",   note:"Куда продукт может вырасти. Сгруппировано по темам; брать можно по одной." }
+];
+
+const PRIOS = { crit:"Критично", high:"Высокий", med:"Средний", low:"Низкий" };
+
+const ITEMS = [
+  /* ================= БАГИ ================= */
+  { id:"B1", cat:"bug", prio:"crit", eff:"S", title:"Все даты считаются в UTC, а не в местном времени",
+    why:"todayStr() и addDays() строят дату через toISOString(), то есть по UTC. В Москве (UTC+3) с 00:00 до 03:00 «сегодня» будет вчерашним, а в западных зонах вечером — завтрашним. Отсюда ложные просрочки, неверная линия «сегодня» в Ганте и промах на день в блоке «ближайшие 7 дней».",
+    where:"js/app.js:18 (todayStr), js/app.js:24 (addDays), js/app.js:1786 (шкала Ганта)",
+    how:"Завести <b>utils/date.js</b>: форматирование из локальных getFullYear/getMonth/getDate и парсинг «ГГГГ-ММ-ДД» через new Date(y, m-1, d). Никакого toISOString для календарных дат." },
+
+  { id:"B2", cat:"bug", prio:"crit", eff:"S", title:"save() без обработки ошибок + корзина растёт без ограничений",
+    why:"localStorage.setItem вызывается напрямую, без try/catch. При переполнении квоты (обычно ~5 МБ) бросается QuotaExceededError: интерфейс покажет изменение, а на диск оно не попадёт — пользователь узнает об этом только после перезагрузки. Корзина хранит удалённые задачи целиком, в том же хранилище, и никогда не чистится автоматически.",
+    where:"js/app.js:162 (save), js/app.js:2037 (trashTasks)",
+    how:"Обернуть запись в <b>try/catch</b> с явным сообщением «не удалось сохранить», автоочистка корзины (например, старше 30 дней или больше 50 записей) и переезд на <b>IndexedDB</b>, когда данных станет много." },
+
+  { id:"B3", cat:"bug", prio:"high", eff:"S", title:"Две открытые вкладки перетирают данные друг друга",
+    why:"Состояние читается один раз при загрузке и целиком перезаписывается при каждом изменении. Если приложение открыто в двух вкладках, та, что сохранит последней, затрёт всю работу другой без всякого предупреждения.",
+    where:"js/app.js:134 (loadState), js/app.js:162 (save)",
+    how:"Слушать событие <b>window 'storage'</b>: перечитывать состояние и перерисовывать (или показывать «данные изменились в другой вкладке — обновить»). Плюс хранить в состоянии updatedAt и не писать поверх более свежей версии." },
+
+  { id:"B4", cat:"bug", prio:"med", eff:"S", title:"Правки в заметках сохраняются только по потере фокуса",
+    why:"Все поля панели деталей слушают событие change, а не input. Закрытие модалки по Escape не гарантирует blur — недописанный текст заметки в этот момент может пропасть. Тем же объясняется ощущение, что «Enter в названии ничего не делает» (для названия это уже обошли отдельным обработчиком).",
+    where:"js/app.js:2470 (detailNotes), js/app.js:2377 (detailTitle)",
+    how:"Перевести поля на <b>input + debounce 300 мс</b>, добавить незаметный индикатор «сохранено», а при закрытии панели принудительно фиксировать текущее значение." },
+
+  { id:"B5", cat:"bug", prio:"med", eff:"S", title:"Задачи из удалённого проекта нельзя восстановить, кнопка молчит",
+    why:"restoreFromTrash ищет проект по entry.projectId и, если проект уже удалён, просто выходит через return. В корзине запись при этом видна, кнопка «Восстановить» нажимается — и ничего не происходит, без объяснений.",
+    where:"js/app.js:2074-2080 (restoreFromTrash)",
+    how:"Либо помечать такие записи как «проект удалён» и предлагать выбрать проект-приёмник, либо <b>отправлять проект в корзину целиком</b> (вместе с подпроектами) и восстанавливать его вместе с задачами." },
+
+  { id:"B6", cat:"bug", prio:"med", eff:"S", title:"Удаление раздела уносит подзадачи из других разделов",
+    why:"Удаляются задачи раздела вместе со всем поддеревом через getTaskDescendantIds — а подзадача могла быть переставлена в другой раздел вручную. Формально это верно (иначе появились бы «сироты» с ссылкой на удалённого родителя), но в тексте подтверждения об этом ни слова.",
+    where:"js/app.js:1972-1989 (deleteSection)",
+    how:"В подтверждении указывать <b>реальное число задач</b> к удалению, включая вложенные из других разделов: «будет удалено 7 задач, из них 3 в других разделах»." },
+
+  { id:"B7", cat:"bug", prio:"med", eff:"S", title:"Фокус перескакивает в поле «Добавить задачу» при любом обновлении",
+    why:"bindQuickAddEvents вызывает input.focus() прямо во время рендера. Так как renderAll() выполняется после каждого изменения, открытая строка быстрого добавления перетягивает фокус на себя — даже если пользователь в этот момент печатал в другом месте.",
+    where:"js/app.js:938-941 (bindQuickAddEvents)",
+    how:"Фокусировать поле <b>только в тот момент, когда его открыли</b> (по флагу «нужно сфокусировать»), а не при каждой перерисовке." },
+
+  { id:"B8", cat:"bug", prio:"med", eff:"S", title:"Нет проверки «срок не раньше начала»",
+    why:"Даты вводятся двумя независимыми полями без валидации. Если срок раньше начала, полоса в Ганте молча схлопывается до одного дня через Math.max(1, ...) — ошибка в данных остаётся невидимой.",
+    where:"js/app.js:1815 (barHtmlFor), js/app.js:2405-2420 (detailStart/detailDue)",
+    how:"Подсвечивать конфликт в панели деталей, ставить <b>min/max у полей даты</b> и добавить строку в блок аналитики «Что требует внимания»." },
+
+  { id:"B9", cat:"bug", prio:"med", eff:"M", title:"Зависимости работают только внутри одного проекта",
+    why:"dependsOn ищется в proj.tasks, поэтому связать задачу проекта с задачей его же подпроекта нельзя. Но виды «Структура» и «Гант» показывают их в одном дереве, и пользователь естественно ждёт, что связь между ними возможна.",
+    where:"js/app.js:399-451 (блок зависимостей), js/app.js:2181 (renderDepsSection)",
+    how:"Искать задачи <b>по всему состоянию</b> (индекс id → {task, project}), в выпадающем списке зависимостей показывать задачи всей ветки проектов, а проверку циклов вести по глобальному графу." },
+
+  { id:"B10", cat:"bug", prio:"med", eff:"S", title:"Нет версии схемы данных и миграций",
+    why:"Ключ «tasking-state-v1» плюс normalizeState, который дописывает недостающие поля вручную. Пока изменения только «добавили поле», это работает; первое переименование или изменение структуры сломает данные пользователей без пути назад.",
+    where:"js/app.js:9 (STORAGE_KEY), js/app.js:99 (normalizeState)",
+    how:"Хранить <b>schemaVersion</b> в состоянии и держать список миграций (v1→v2→v3), применяемых по порядку. Перед миграцией — автоматический бэкап предыдущего состояния." },
+
+  { id:"B11", cat:"bug", prio:"low", eff:"S", title:"Вид, фильтр и свёрнутость не привязаны к проекту",
+    why:"state.view и state.showCompleted общие для всех проектов, а collapsedProjects/collapsedTreeTasks вообще не сохраняются между перезагрузками (это отмечено и в комментарии в коде). Переключился на другой проект — потерял привычную настройку и всё дерево раскрылось заново.",
+    where:"js/app.js:156-157, js/app.js:2864 (renderAll)",
+    how:"Хранить <b>вид и свёрнутость в разрезе проекта</b>: state.ui[projectId] = { view, collapsed: [...] }." },
+
+  { id:"B12", cat:"bug", prio:"low", eff:"S", title:"Название проекта — contenteditable-заголовок",
+    why:"h1 с contenteditable принимает вставку форматированного текста и переносы строк; в состояние попадает textContent, но по пути возможны неожидаемые пробелы и невидимые символы.",
+    where:"index.html:60, js/app.js:2955 (обработчик blur)",
+    how:"Заменить на обычный <b>input</b> в стиле заголовка (либо чистить вставку через paste-обработчик) и ограничить длину." },
+
+  /* ================= ПРОИЗВОДИТЕЛЬНОСТЬ ================= */
+  { id:"P1", cat:"perf", prio:"high", eff:"M", title:"Каждое изменение перерисовывает весь экран и перевешивает все слушатели",
+    why:"renderAll() пересобирает innerHTML сайдбара и текущего вида, а затем bind*Events вешает слушатели на каждый узел заново. Поиск дергает renderAll на каждое нажатие клавиши без debounce. На нескольких сотнях задач это будет заметно как задержка при вводе.",
+    where:"js/app.js:2846 (renderAll), js/app.js:2966 (searchInput input), js/app.js:1027/1234/1503 (bind*Events)",
+    how:"Три шага: <b>делегирование событий</b> (один слушатель на контейнер вместо тысячи), <b>батч рендера через requestAnimationFrame</b> (несколько изменений — одна перерисовка), <b>debounce 150–200 мс</b> для поиска." },
+
+  { id:"P2", cat:"perf", prio:"high", eff:"M", title:"Квадратичная сложность в getSubtasks / getEffectiveDates",
+    why:"getSubtasks фильтрует весь массив задач проекта при каждом вызове, а getEffectiveDates рекурсивно вызывает его для каждого потомка — и вызывается заново для каждой строки в списке, дереве, Ганте, дашборде и аналитике. На 500 задачах это десятки тысяч лишних проходов на один рендер.",
+    where:"js/app.js:374 (getSubtasks), js/app.js:273 (getEffectiveDates), js/app.js:1750 (Гант)",
+    how:"Один раз за рендер строить <b>Map(parentId → children)</b> и кэш эффективных дат; сбрасывать кэш только при изменении данных." },
+
+  { id:"P3", cat:"perf", prio:"med", eff:"M", title:"Гант создаёт DOM-узел на каждый день и на каждую строку",
+    why:"Шапка — отдельный div на каждый день диапазона; у каждой строки — timeline-ячейка шириной totalDays × dayWidth. При масштабе 6 px/день и диапазоне в год это тысячи узлов, которые пересоздаются при каждом движении ползунка масштаба.",
+    where:"js/app.js:1778-1790 (шапка дней), js/app.js:1866 (строки)",
+    how:"<b>Виртуализация строк</b> (рисовать только видимые), сетку дней — CSS-градиентом вместо узлов (частично уже так сделано для выходных), полосы — в одном SVG. Масштаб менять через CSS-переменную без полного ре-рендера." },
+
+  { id:"P4", cat:"perf", prio:"med", eff:"S", title:"JSON.stringify всего состояния при каждом изменении",
+    why:"save() сериализует все проекты, задачи, людей и корзину целиком — даже когда изменилось одно поле приоритета. При активной работе это происходит десятки раз в минуту.",
+    where:"js/app.js:162 (save)",
+    how:"<b>Debounce сохранения</b> (200–500 мс) с обязательной записью на beforeunload; в перспективе — IndexedDB с записью только изменённых сущностей." },
+
+  { id:"P5", cat:"perf", prio:"low", eff:"S", title:"Поиск пересечений по датам — попарным перебором",
+    why:"hasScheduleConflict сравнивает все пары незавершённых задач человека, и вызывается для каждой строки экрана «Люди»; getConflictingTasks обходит все проекты целиком при каждом изменении даты в панели деталей.",
+    where:"js/app.js:458 (getConflictingTasks), js/app.js:475 (hasScheduleConflict)",
+    how:"Раз за рендер собирать интервалы по исполнителям, сортировать по началу и искать пересечения <b>линейным проходом</b> (sweep-line)." },
+
+  /* ================= АРХИТЕКТУРА ================= */
+  { id:"A1", cat:"arch", prio:"high", eff:"M", title:"Разбить app.js (3031 строка) на ES-модули",
+    why:"Сейчас всё в одной IIFE: состояние, DOM-ссылки, бизнес-логика, шесть рендереров, drag-and-drop и обработчики. Файл держится на хороших комментариях, но поиск по нему уже требует усилий, а любая правка потенциально задевает соседей.",
+    where:"js/app.js — целиком",
+    how:"Модули без сборщика (<b>script type=\"module\"</b>): state/store.js, state/selectors.js, views/board|list|tree|gantt|dashboard|people|trash.js, features/dnd.js, features/deps.js, ui/modal.js, utils/date.js, utils/html.js." },
+
+  { id:"A2", cat:"arch", prio:"high", eff:"M", title:"Одна точка изменения состояния вместо save() + renderAll() вручную",
+    why:"Пары save() и renderAll() рассыпаны по всему файлу (больше сотни мест), причём иногда с флагом keepDetail, иногда без, иногда с точечным renderGantt(). Легко забыть одно из двух — и появляется рассинхрон интерфейса и данных.",
+    where:"js/app.js — практически все обработчики (напр. 2886-2980)",
+    how:"Функция <b>mutate(fn, { rerender })</b>: применяет изменение, помечает, что нужно перерисовать, ставит рендер в очередь rAF и сохраняет с debounce. Побочный бонус — сюда же вешается undo/redo (см. U2)." },
+
+  { id:"A3", cat:"arch", prio:"med", eff:"M", title:"Мемоизированные селекторы и индексы",
+    why:"Одни и те же производные величины (подзадачи, эффективные даты, статистика проекта, загрузка людей) считаются заново в каждом рендерере, и логика частично дублируется между app.js и analytics.js.",
+    where:"js/app.js:588 (getProjectStats), js/app.js:323 (getUserStats), js/analytics.js:47 (compute)",
+    how:"Модуль <b>selectors.js</b>: индексы по id, кэш по (стейт-версия) и единая точка расчёта, которой пользуются и виды, и аналитика." },
+
+  { id:"A4", cat:"arch", prio:"med", eff:"M", title:"Нет ни одного теста",
+    why:"Логика, где ошибка стоит дорого, вполне тестируема и чиста: авторасчёт дат по подзадачам, проверка циклов зависимостей, переупорядочивание и вложение задач, восстановление из корзины, поиск пересечений в расписании.",
+    where:"весь проект",
+    how:"<b>Vitest</b> + пара десятков юнит-тестов на чистые функции (после A1 они станут импортируемыми). Заодно защита от регрессий при переходе на индексы из P2." },
+
+  { id:"A5", cat:"arch", prio:"med", eff:"S", title:"Нет линтера, форматтера и типов",
+    why:"Стиль пока выдержан вручную, но опечатка в имени поля (assignee vs assigneeId — след такой истории виден в normalizeState) обнаруживается только в браузере.",
+    where:"весь проект",
+    how:"<b>ESLint + Prettier</b>, затем JSDoc-типы (@typedef Task, Project, User) с проверкой через tsc --checkJs — типы без переписывания на TypeScript." },
+
+  { id:"A6", cat:"arch", prio:"med", eff:"S", title:"Сборка HTML строками — риск пропустить escapeHtml",
+    why:"Разметка собирается шаблонными строками и вставляется через innerHTML. escapeHtml применяется дисциплинированно, но безопасность держится на внимательности: один забытый вызов в новом коде — и название задачи с тегами станет разметкой.",
+    where:"js/app.js:852 (taskCardHtml), js/app.js:1201 (rowHtml), js/analytics.js:118",
+    how:"Либо крошечный шаблонизатор с автоэкранированием (<b>uhtml/lit-html</b>, ~3 КБ, без сборки), либо создание узлов с textContent для всего пользовательского текста." },
+
+  { id:"A7", cat:"arch", prio:"med", eff:"S", title:"Нет роутинга — нельзя дать ссылку на задачу",
+    why:"Весь текущий экран живёт только в состоянии: URL всегда один и тот же, кнопка «назад» в браузере выкидывает из приложения, а поделиться конкретной задачей или видом невозможно.",
+    where:"js/app.js:2846 (renderAll), index.html",
+    how:"Hash-роутинг: <b>#/project/:id/gantt?task=:taskId</b>, синхронизация в обе стороны (URL → состояние при загрузке, состояние → URL при навигации)." },
+
+  { id:"A8", cat:"arch", prio:"low", eff:"S", title:"Дублирование утилит между app.js и analytics.js",
+    why:"escapeHtml описан дважды, форматирование даты — тоже (formatDue в app.js, fmtDate в analytics.js), а analytics получает функции app.js через объект helpers — работающий, но хрупкий контракт.",
+    where:"js/app.js:345 и js/analytics.js:19; js/app.js:261 и js/analytics.js:30",
+    how:"Общие <b>utils/</b> и импорт напрямую вместо передачи helpers — сразу после перехода на модули (A1)." },
+
+  { id:"A9", cat:"arch", prio:"low", eff:"S", title:"Хранилище не абстрагировано",
+    why:"localStorage вызывается напрямую из save/loadState. Любая смена хранилища (IndexedDB, файл, бэкенд) потребует правок в бизнес-логике.",
+    where:"js/app.js:134, js/app.js:162",
+    how:"Интерфейс <b>storage.load() / storage.save(state)</b> с реализациями local/idb/remote — переключается одной строкой и открывает путь к F10 и F17." },
+
+  /* ================= UX ================= */
+  { id:"U1", cat:"ux", prio:"high", eff:"S", title:"На доске нельзя отметить задачу выполненной",
+    why:"У карточки нет чекбокса: чтобы закрыть задачу, нужно открыть модальное окно деталей или переключиться в другой вид. В списке и дереве чекбокс есть — на доске его ждут в первую очередь.",
+    where:"js/app.js:852 (taskCardHtml), js/app.js:1201 (rowHtml — там чекбокс есть)",
+    how:"Добавить чекбокс в левый верхний угол карточки (появляется при наведении, всегда виден у выполненных) и <b>отдельную ручку для перетаскивания</b>, чтобы клик и drag не конфликтовали." },
+
+  { id:"U2", cat:"ux", prio:"high", eff:"M", title:"Нет отмены действий (Ctrl+Z)",
+    why:"Корзина спасает только удалённые задачи. Случайно перетащил карточку в другой раздел, вложил задачу не туда, переименовал проект, снял исполнителя — вернуть можно лишь руками, вспоминая, как было.",
+    where:"js/app.js:1111 (nestTaskUnder), js/app.js:1130 (reorderTask), js/app.js:1086 (moveTaskToSection)",
+    how:"История снимков состояния (30–50 шагов) в единой mutate() из A2, горячие клавиши <b>Ctrl+Z / Ctrl+Shift+Z</b> и тост «Задача удалена — Отменить» вместо похода в корзину." },
+
+  { id:"U3", cat:"ux", prio:"high", eff:"M", title:"Только текстовый поиск — нет фильтров и сортировки",
+    why:"Есть строка поиска и переключатель «показывать выполненные». Нельзя посмотреть «только мои», «без исполнителя», «высокий приоритет», «срок на этой неделе», «просроченные», нельзя отсортировать список по сроку или приоритету.",
+    where:"js/app.js:336 (matchesSearch), js/app.js:1166 (renderList)",
+    how:"Панель фильтров (исполнитель, приоритет, тег, диапазон срока, статус) + сортировка списка + <b>сохранённые представления</b>: «Мои на этой неделе», «Просрочено», «Без исполнителя»." },
+
+  { id:"U4", cat:"ux", prio:"high", eff:"M", title:"Поиск не выходит за пределы активного проекта",
+    why:"Поиск фильтрует задачи текущего проекта и его подпроектов. Чтобы найти задачу, надо сначала вспомнить проект — при десятке проектов это главный источник раздражения.",
+    where:"js/app.js:533 (collectSectionTasks), js/app.js:2966",
+    how:"<b>Палитра команд Ctrl+K</b>: глобальный поиск задач по всем проектам с переходом сразу к задаче, а также быстрые команды («новый проект», «перейти к проекту», «сменить вид»)." },
+
+  { id:"U5", cat:"ux", prio:"high", eff:"L", title:"Гант только показывает — в нём ничего нельзя изменить",
+    why:"Полосы не перетаскиваются, края не растягиваются, связи «сначала выполнить» не видны линиями, вехи не поддерживаются, критический путь не выделен. Для планирования приходится открывать каждую задачу и править даты в модалке.",
+    where:"js/app.js:1692 (renderGantt), js/app.js:1815 (barHtmlFor)",
+    how:"Перетаскивание полосы (сдвиг обеих дат), растягивание краёв (длительность), <b>стрелки зависимостей</b> в SVG-слое, вехи как ромбы, подсветка критического пути (см. F1)." },
+
+  { id:"U6", cat:"ux", prio:"med", eff:"M", title:"Массовые операции невозможны",
+    why:"Перенести десять задач в другой раздел, назначить их одному человеку или сдвинуть сроки на неделю можно только по одной, через модальное окно.",
+    where:"js/app.js:1234 (bindListEvents), js/app.js:1503 (bindTreeEvents)",
+    how:"Множественный выбор <b>Shift/Ctrl+клик</b>, панель действий над выбранным (статус, исполнитель, приоритет, срок, теги, удалить) и перетаскивание группой." },
+
+  { id:"U7", cat:"ux", prio:"med", eff:"M", title:"Любая правка требует открытия большой модалки",
+    why:"Панель деталей — модальное окно по центру с затемнением, оно перекрывает контекст. Чтобы поменять только срок или исполнителя, приходится открывать её, менять поле и закрывать.",
+    where:"index.html:134-232 (detail-overlay), js/app.js:2115 (openDetail)",
+    how:"Быстрые поповеры прямо из карточки (дата, исполнитель, приоритет), <b>контекстное меню правой кнопкой</b> и опция «показывать детали боковой панелью», не перекрывая доску." },
+
+  { id:"U8", cat:"ux", prio:"med", eff:"M", title:"Готовность задачи — только «да/нет»",
+    why:"У задачи нет процента выполнения, поэтому прогресс крупной задачи виден лишь как «сколько подзадач закрыто», а на дашборде процент считается по количеству задач, где мелкая правка весит столько же, сколько недельная работа.",
+    where:"js/app.js:2702 (renderDashboard, pct), js/analytics.js:26 (pct)",
+    how:"Поле <b>progress 0–100 %</b> с автоматическим rollup по подзадачам (взвешенно по оценке часов) и режимом ручного ввода — по аналогии с уже сделанным datesAuto." },
+
+  { id:"U9", cat:"ux", prio:"med", eff:"M", title:"На телефоне сайдбар просто исчезает",
+    why:"При ширине меньше 720 px .sidebar получает display:none — вместе с ним пропадают список проектов, «Дашборд», «Люди» и «Корзина». Перейти между проектами с телефона невозможно.",
+    where:"style.css:1818-1825",
+    how:"Бургер-кнопка и выезжающая панель, крупные зоны нажатия, свайп между видами; drag-and-drop заменить на «переместить в…» из контекстного меню." },
+
+  { id:"U10", cat:"ux", prio:"med", eff:"S", title:"Нет тёмной темы и настроек плотности",
+    why:"В :root жёстко прописан color-scheme: light. Все цвета уже вынесены в переменные, так что тёмная тема — это в основном второй набор значений.",
+    where:"style.css:1-21",
+    how:"Второй набор токенов под <b>prefers-color-scheme</b> плюс переключатель «светлая/тёмная/системная», настройки плотности строк и размера шрифта." },
+
+  { id:"U11", cat:"ux", prio:"high", eff:"S", title:"Данные никак не вынести из браузера",
+    why:"Всё живёт в localStorage одного браузера: нет экспорта, импорта, бэкапа. Очистка данных сайта, режим инкогнито или новый компьютер — и всё пропало. Демо-данные тоже нельзя вернуть, чтобы посмотреть примеры.",
+    where:"js/app.js:134 (loadState), js/app.js:35 (seedState)",
+    how:"Кнопки <b>«Экспорт JSON» / «Импорт JSON»</b>, автоматический бэкап последних версий в отдельном ключе, «сбросить и загрузить демо», позже — экспорт в CSV/Excel (F6)." },
+
+  { id:"U12", cat:"ux", prio:"low", eff:"S", title:"Нет горячих клавиш, кроме Escape",
+    why:"Всё делается мышью. Для инструмента, где задачи создают десятками, это ощутимо медленнее, чем могло бы быть.",
+    where:"js/app.js:3013 (document keydown)",
+    how:"<b>n</b> — новая задача, <b>/</b> — поиск, <b>1…5</b> — виды, <b>e</b> — открыть детали, <b>Space</b> — выполнено, <b>Alt+↑/↓</b> — переместить, <b>Tab/Shift+Tab</b> — вложить/поднять, и подсказка со списком по «?»." },
+
+  { id:"U13", cat:"ux", prio:"low", eff:"S", title:"Нет настроек на уровне проекта",
+    why:"Цвет проекта выдаётся по кругу из палитры и не меняется, набор разделов всегда «К выполнению / В работе / Готово», WIP-лимитов у колонок нет.",
+    where:"js/app.js:2507 (createProject), js/app.js:12 (PROJECT_COLORS)",
+    how:"Диалог настроек проекта: <b>выбор цвета</b>, шаблон разделов, лимит задач на колонку с подсветкой перегруза, архивация проекта." },
+
+  /* ================= ДОСТУПНОСТЬ ================= */
+  { id:"Y1", cat:"a11y", prio:"med", eff:"S", title:"Иконочные кнопки без текстовых подписей для скринридера",
+    why:"Кнопки 🗑, ×, ▶, +, ⊟/⊞ имеют только title. Скринридер прочитает title не всегда и не везде, а чевроны сворачивания не сообщают своё состояние.",
+    where:"index.html:24-32, js/app.js:1858 (chevron), js/app.js:2646 (корзина)",
+    how:"<b>aria-label</b> у каждой иконочной кнопки, <b>aria-expanded</b> у чевронов, aria-live для счётчика корзины." },
+
+  { id:"Y2", cat:"a11y", prio:"med", eff:"S", title:"В модалках нет ловушки фокуса и возврата фокуса",
+    why:"При открытии деталей, аналитики или подтверждения фокус остаётся на прежнем элементе; Tab уводит под затемнение, а после закрытия фокус не возвращается туда, откуда пришли.",
+    where:"js/app.js:625 (showModal), js/app.js:2115 (openDetail), js/app.js:605 (аналитика)",
+    how:"Общий помощник: <b>фокус на первый элемент, цикл Tab внутри модалки, возврат фокуса при закрытии</b>, role=\"dialog\" + aria-modal." },
+
+  { id:"Y3", cat:"a11y", prio:"med", eff:"S", title:"Перетаскивание без клавиатурной альтернативы",
+    why:"Перенос между разделами, вложение и сортировка доступны только мышью. В виде «Структура» кнопки «выше/ниже/вложить» уже есть — значит, шаблон решения в проекте уже найден, его надо распространить.",
+    where:"js/app.js:1608-1662 (indentTask/outdentTask/moveTaskUpDown), js/app.js:1027 (доска)",
+    how:"Те же операции с клавиатуры во всех видах (<b>Alt+стрелки</b>) плюс пункт «Переместить в…» в контекстном меню." },
+
+  { id:"Y4", cat:"a11y", prio:"low", eff:"S", title:"Слабый контраст второстепенного текста",
+    why:"--text-faint (#a8a5b8) на белом даёт примерно 2,3:1 — заметно ниже нормы 4,5:1 из WCAG AA. Этим цветом выведены даты, счётчики и подписи в шкале Ганта.",
+    where:"style.css:8 (--text-faint)",
+    how:"Затемнить приглушённые тона до <b>4,5:1</b> (для крупного текста — минимум 3:1) и заодно проверить цвета бейджей приоритетов." },
+
+  { id:"Y5", cat:"a11y", prio:"low", eff:"S", title:"Строки интерфейса вшиты в код",
+    why:"Все подписи, форматы дат (ru-RU) и сообщения расставлены прямо в шаблонах. Добавить английский или изменить формулировку разом невозможно.",
+    where:"js/app.js — все шаблоны; js/app.js:1801 (toLocaleDateString)",
+    how:"Словарь <b>i18n/ru.json</b> и функция t('key'), локаль и формат даты — из настроек." },
+
+  /* ================= НОВЫЕ ВОЗМОЖНОСТИ ================= */
+  { id:"F1", cat:"feat", prio:"high", eff:"L", title:"Автопланирование по зависимостям и критический путь",
+    why:"Сейчас связь «сначала выполнить» только предупреждает значком ⛔ — даты не сдвигаются. Это главное отличие от MS Project, на который приложение явно ориентируется: там сдвиг предшественника автоматически перестраивает всю цепочку.",
+    where:"js/app.js:440 (getBlockingDependencies), js/app.js:1692 (Гант)",
+    how:"Типы связей <b>FS/SS/FF/SF с задержкой (lag)</b>, автосдвиг преемников при изменении даты, расчёт <b>критического пути</b> и резервов (slack), режим «ручная/автоматическая» задача, предпросмотр «что сдвинется» перед применением." },
+
+  { id:"F2", cat:"feat", prio:"high", eff:"M", title:"Производственный календарь: выходные, праздники, графики людей",
+    why:"Длительность считается в календарных днях. Выходные в Ганте только закрашены, но задача через них «работает», и загрузка человека считается по общей сумме часов без привязки к неделям.",
+    where:"js/app.js:1785 (isWeekend), js/app.js:323 (getUserStats)",
+    how:"Рабочий календарь проекта (<b>выходные + праздники</b>), длительность в рабочих днях, индивидуальные графики и частичная занятость, перенос сроков с учётом нерабочих дней." },
+
+  { id:"F3", cat:"feat", prio:"med", eff:"M", title:"Вехи, фазы и базовый план (baseline)",
+    why:"Все задачи равнозначны: нельзя отметить контрольную точку и нельзя сравнить «как планировали» с «как получилось» — а именно это спрашивают на статусах по проекту.",
+    where:"js/app.js:1692 (Гант), js/analytics.js:47",
+    how:"Тип задачи <b>«веха»</b> (нулевая длительность, ромб в Ганте), снимок базового плана по кнопке и вторая, полупрозрачная полоса «план» под фактической + отчёт об отклонениях." },
+
+  { id:"F4", cat:"feat", prio:"high", eff:"L", title:"Учёт времени: факт против оценки",
+    why:"Есть только estimateHours. Ни фактических затрат, ни таймера, ни истории — поэтому нельзя ни оценить точность планирования, ни построить burndown.",
+    where:"index.html:216 (Оценка, ч), js/app.js:2452 (detailEstimate)",
+    how:"Логи времени (<b>таймер «начать/остановить»</b> и ручной ввод), факт vs оценка в задаче и проекте, недельный таймшит, графики <b>burndown/burnup</b> и прогноз даты завершения по фактической скорости закрытия." },
+
+  { id:"F5", cat:"feat", prio:"med", eff:"M", title:"Ресурсное выравнивание и тепловая карта загрузки",
+    why:"Загрузка людей сейчас — сумма часов открытых задач против недельной нормы, без привязки к датам. Человек, у которого всё сходится на одну неделю, выглядит так же, как тот, у кого работа растянута на месяц. Экран «Люди» показывает только флажок ⚠ о пересечении.",
+    where:"js/app.js:323 (getUserStats), js/app.js:475 (hasScheduleConflict), js/app.js:2573 (renderPeople)",
+    how:"Раскладывать часы <b>по неделям и дням</b>, тепловая карта «человек × неделя», подсветка перегрузки больше 100 % и подсказки «сдвинуть задачу X на неделю — перегрузка уйдёт»." },
+
+  { id:"F6", cat:"feat", prio:"med", eff:"M", title:"Экспорт и импорт: CSV/Excel, MS Project, iCal, печать Ганта",
+    why:"Данные никак не передать наружу: ни отчёт руководителю, ни сроки в календарь, ни печать диаграммы для совещания.",
+    where:"весь проект (нет ни одной функции экспорта)",
+    how:"Экспорт задач в <b>CSV/XLSX</b>, обмен с <b>MS Project XML</b>, <b>iCal-подписка</b> на сроки (можно как выгрузку .ics), печать и PDF диаграммы Ганта, импорт задач из CSV." },
+
+  { id:"F7", cat:"feat", prio:"med", eff:"M", title:"Вложения и полноценные заметки",
+    why:"Заметки — обычный textarea без форматирования, файлы прикрепить некуда. Скриншот, ТЗ или ссылку на макет приходится держать в другом месте.",
+    where:"index.html:151 (detail-notes), js/app.js:2470",
+    how:"Markdown или простое форматирование, чек-листы внутри заметки, <b>вложения в IndexedDB</b> (файлы перетаскиванием, вставка картинки из буфера), ссылки на другие задачи через #." },
+
+  { id:"F8", cat:"feat", prio:"high", eff:"M", title:"Экраны «Сегодня» и «Моя неделя» + календарь",
+    why:"Все виды привязаны к проекту, а дашборд — это сводка руководителя. Исполнителю негде увидеть простой ответ на вопрос «что я делаю сегодня» по всем проектам сразу.",
+    where:"js/app.js:2846 (renderAll, экраны), js/app.js:2702 (renderDashboard)",
+    how:"Экран <b>«Сегодня»</b> (просрочено + на сегодня + следующее), <b>«Моя неделя»</b> с группировкой по дням и <b>календарь</b> месяц/неделя с перетаскиванием задач по датам." },
+
+  { id:"F9", cat:"feat", prio:"med", eff:"M", title:"Комментарии и история изменений задачи",
+    why:"Обсуждение и контекст решений живут вне приложения, а понять «кто и когда сдвинул срок» невозможно — история нигде не пишется.",
+    where:"js/app.js:2115 (openDetail), js/app.js — все mutate-места",
+    how:"Лента комментариев в панели деталей и <b>журнал изменений</b> полей (что, когда, кем) — пишется автоматически из единой mutate() (A2). Далее — @упоминания." },
+
+  { id:"F10", cat:"feat", prio:"med", eff:"L", title:"Синхронизация и многопользовательский режим",
+    why:"Приложение уже говорит про исполнителей, загрузку и передачу задач — но данные видны только в одном браузере. Это главное ограничение всей затеи.",
+    where:"js/app.js:134/162 (localStorage), js/app.js:2553 (люди)",
+    how:"Два пути: <b>бэкенд</b> (Supabase/Firebase — авторизация, роли, ссылка «только просмотр») или <b>CRDT (Yjs)</b> для совместной работы без сервера. В обоих случаях сначала нужен слой хранилища из A9 и офлайн-очередь изменений." },
+
+  { id:"F11", cat:"feat", prio:"med", eff:"M", title:"Аналитика потока: CFD, lead/cycle time, застоявшиеся задачи",
+    why:"Аналитика хорошо показывает текущий срез (просрочено, заблокировано, без исполнителя), но не показывает динамику: ускоряемся мы или тормозим, сколько задача в среднем живёт, где скапливается работа.",
+    where:"js/analytics.js:47 (compute)",
+    how:"Снимки состояния по дням для истории, <b>диаграмма накопленного потока</b>, среднее время выполнения, WIP-лимиты, список <b>«не двигалось N дней»</b>, настраиваемые виджеты дашборда." },
+
+  { id:"F12", cat:"feat", prio:"med", eff:"M", title:"Правила-автоматизации",
+    why:"Приложение уже умеет замечать нестыковки (выполненная задача с активными подзадачами, просрочка, пересечение по датам), но только сообщает о них — исправлять всё равно руками.",
+    where:"js/app.js:1283 (confirmCompleteWithActiveChildren), js/analytics.js:66 (staleCompleted)",
+    how:"Простые правила «если → то»: <b>закрыты все подзадачи → закрыть родителя</b>, просрочено → поднять приоритет, перенос в «Готово» → отметить выполненной, назначен исполнитель → уведомить." },
+
+  { id:"F13", cat:"feat", prio:"med", eff:"M", title:"Шаблоны проектов и повторяющиеся задачи",
+    why:"Каждый новый проект начинается с трёх стандартных разделов и пустого списка. Типовые процессы (запуск, релиз, онбординг) приходится набивать заново, а регулярные задачи — создавать вручную каждую неделю.",
+    where:"js/app.js:2507 (createProject), js/app.js:1997 (createTask)",
+    how:"Сохранить проект как <b>шаблон</b> (разделы + дерево задач + оценки со сдвигом дат) и повторяющиеся задачи по правилу <b>RRULE</b> (каждый понедельник, раз в месяц)." },
+
+  { id:"F14", cat:"feat", prio:"med", eff:"S", title:"Быстрый ввод с разбором строки",
+    why:"Быстрое добавление создаёт задачу только с названием: срок, исполнителя, приоритет и оценку приходится проставлять потом в модалке — по три-четыре клика на каждую задачу.",
+    where:"js/app.js:938 (bindQuickAddEvents), js/app.js:1997 (createTask)",
+    how:"Разбор строки при вводе: <b>«Отчёт до пт @Аня !высокий #отчёты 4ч»</b> → срок, исполнитель, приоритет, тег, оценка. Разобранные части подсвечивать в поле, чтобы было видно, что понято." },
+
+  { id:"F15", cat:"feat", prio:"low", eff:"M", title:"AI-помощник по планированию",
+    why:"Структура данных для этого уже есть: дерево задач, оценки, зависимости, люди с недельными нормами.",
+    where:"новый модуль",
+    how:"<b>Разбить задачу на подзадачи</b> по описанию, предложить оценку по похожим закрытым задачам, недельная сводка «что изменилось и где риски», поиск перегруженных людей и нереалистичных сроков." },
+
+  { id:"F16", cat:"feat", prio:"med", eff:"M", title:"PWA: офлайн, установка, уведомления о сроках",
+    why:"Приложение уже полностью работает на клиенте и запускается через python -m http.server — до устанавливаемого офлайн-приложения остаётся один шаг. Напоминаний о сроках при этом нет никаких.",
+    where:".claude/launch.json, index.html (нет манифеста и service worker)",
+    how:"<b>manifest.webmanifest</b> + service worker (кэш оболочки), иконки, установка на рабочий стол, уведомления «сегодня срок у 3 задач» через Notification API." },
+
+  { id:"F17", cat:"feat", prio:"low", eff:"M", title:"«Проект = файл» через File System Access API",
+    why:"Данные заперты в localStorage конкретного браузера: их не положить в облачную папку, не отправить коллеге, не версионировать в git.",
+    where:"js/app.js:134/162",
+    how:"Открывать и сохранять <b>tasking.json</b> прямо в файловой системе (с автосохранением по разрешению), тогда файл можно держать в OneDrive или репозитории и смотреть историю через git diff." },
+
+  { id:"F18", cat:"feat", prio:"low", eff:"S", title:"Архив выполненного",
+    why:"Выполненные задачи остаются в общих списках навсегда — их можно только скрыть галочкой целиком. Со временем виды и Гант распухают, а показатели процента выполнения размываются старой историей.",
+    where:"js/app.js:190 (showCompletedToggle), js/app.js:533",
+    how:"Кнопка <b>«Архивировать выполненные»</b> и автоархивация старше N дней; архив — отдельный экран с поиском, задачи оттуда можно вернуть, как из корзины." },
+
+  { id:"F19", cat:"feat", prio:"low", eff:"M", title:"Свои поля и свои статусы",
+    why:"Набор полей фиксирован (приоритет, оценка, теги, исполнитель), приоритетов ровно три. Разным командам нужны «заказчик», «этап», «риск», «код бюджета».",
+    where:"index.html:168-230 (поля деталей), js/app.js:2115 (openDetail)",
+    how:"<b>Пользовательские поля</b> (текст, число, дата, список, флаг) на уровне проекта, свои наборы приоритетов и статусов, выбор колонок в виде «Список»." }
+];
+
+/* ---------- рендер ---------- */
+const LS_KEY = "tasking-improvements-picked";
+let picked = new Set();
+try { picked = new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); } catch (e) { picked = new Set(); }
+
+let activeCat = "all";
+let activePrio = "all";
+let query = "";
+
+const out = document.getElementById("out");
+const catChips = document.getElementById("catChips");
+const prioChips = document.getElementById("prioChips");
+const bar = document.getElementById("bar");
+const barText = document.getElementById("barText");
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function buildChips() {
+  const counts = {};
+  CATS.forEach((c) => { counts[c.key] = ITEMS.filter((i) => i.cat === c.key).length; });
+  catChips.innerHTML =
+    `<button class="chip${activeCat === "all" ? " on" : ""}" data-cat="all">Всё<span class="n">${ITEMS.length}</span></button>` +
+    CATS.map((c) => `<button class="chip${activeCat === c.key ? " on" : ""}" data-cat="${c.key}">${esc(c.name)}<span class="n">${counts[c.key]}</span></button>`).join("");
+  prioChips.innerHTML =
+    `<button class="chip${activePrio === "all" ? " on" : ""}" data-prio="all">Любая важность</button>` +
+    Object.entries(PRIOS).map(([k, label]) =>
+      `<button class="chip${activePrio === k ? " on" : ""}" data-prio="${k}">${esc(label)}<span class="n">${ITEMS.filter((i) => i.prio === k).length}</span></button>`
+    ).join("");
+}
+
+function visible() {
+  const q = query.trim().toLowerCase();
+  return ITEMS.filter((i) => {
+    if (activeCat !== "all" && i.cat !== activeCat) return false;
+    if (activePrio !== "all" && i.prio !== activePrio) return false;
+    if (!q) return true;
+    return (i.id + " " + i.title + " " + i.why + " " + i.how + " " + i.where).toLowerCase().includes(q);
+  });
+}
+
+function cardHtml(i) {
+  return `
+    <article class="card${picked.has(i.id) ? " picked" : ""}" data-card="${i.id}">
+      <div class="card-top">
+        <input type="checkbox" data-pick="${i.id}"${picked.has(i.id) ? " checked" : ""} aria-label="Взять в работу: ${esc(i.title)}">
+        <h3>${esc(i.title)}</h3>
+      </div>
+      <div class="badges">
+        <span class="b b-${i.prio}">${esc(PRIOS[i.prio])}</span>
+        <span class="b b-eff">объём ${i.eff}</span>
+        <span class="b b-id">${i.id}</span>
+      </div>
+      <p>${esc(i.why)}</p>
+      <p class="how">${i.how}</p>
+      <div class="where">${esc(i.where)}</div>
+    </article>`;
+}
+
+function render() {
+  const rows = visible();
+  if (!rows.length) {
+    out.innerHTML = `<div class="empty">Ничего не нашлось. Попробуйте другой запрос или сбросьте фильтры.</div>`;
+    return;
+  }
+  let html = "";
+  CATS.forEach((c) => {
+    const group = rows.filter((i) => i.cat === c.key);
+    if (!group.length) return;
+    html += `<h2 class="sec">${esc(c.name)}<span class="cnt">${group.length} шт.</span></h2>`;
+    html += `<div class="sec-note">${esc(c.note)}</div>`;
+    html += `<div class="grid">${group.map(cardHtml).join("")}</div>`;
+  });
+  out.innerHTML = html;
+}
+
+function updateBar() {
+  bar.hidden = picked.size === 0;
+  const n = picked.size;
+  const word = n % 10 === 1 && n % 100 !== 11 ? "пункт" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? "пункта" : "пунктов");
+  barText.textContent = `Выбрано ${n} ${word}`;
+}
+
+function persist() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify([...picked])); } catch (e) { /* приватный режим — просто не сохраняем */ }
+}
+
+catChips.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-cat]");
+  if (!btn) return;
+  activeCat = btn.dataset.cat;
+  buildChips(); render();
+});
+
+prioChips.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-prio]");
+  if (!btn) return;
+  activePrio = btn.dataset.prio;
+  buildChips(); render();
+});
+
+document.getElementById("q").addEventListener("input", (e) => {
+  query = e.target.value;
+  render();
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  activeCat = "all"; activePrio = "all"; query = "";
+  document.getElementById("q").value = "";
+  buildChips(); render();
+});
+
+out.addEventListener("change", (e) => {
+  const box = e.target.closest("[data-pick]");
+  if (!box) return;
+  const id = box.dataset.pick;
+  if (box.checked) picked.add(id); else picked.delete(id);
+  const card = out.querySelector(`[data-card="${id}"]`);
+  if (card) card.classList.toggle("picked", box.checked);
+  persist(); updateBar();
+});
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+  picked.clear(); persist(); updateBar(); render();
+});
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const chosen = ITEMS.filter((i) => picked.has(i.id));
+  const byCat = CATS.map((c) => {
+    const group = chosen.filter((i) => i.cat === c.key);
+    if (!group.length) return "";
+    return `## ${c.name}\n\n` + group.map((i) =>
+      `- [ ] **${i.id} · ${i.title}** (${PRIOS[i.prio]}, объём ${i.eff})\n` +
+      `  - Проблема: ${i.why}\n` +
+      `  - Решение: ${i.how.replace(/<\/?b>/g, "**")}\n` +
+      `  - Где: ${i.where}`
+    ).join("\n") + "\n";
+  }).filter(Boolean).join("\n");
+  const md = `# Tasking — план работ\n\nВыбрано пунктов: ${chosen.length}\n\n${byCat}`;
+  try {
+    await navigator.clipboard.writeText(md);
+    const btn = document.getElementById("copyBtn");
+    const old = btn.textContent;
+    btn.textContent = "Скопировано";
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  } catch (e) {
+    const w = window.open("", "_blank");
+    if (w) { w.document.body.style.whiteSpace = "pre-wrap"; w.document.body.textContent = md; }
+  }
+});
+
+buildChips();
+render();
+updateBar();
+</script>
+</body>
+</html>

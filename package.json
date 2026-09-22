@@ -1,0 +1,23 @@
+{
+  "name": "tasking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Локальный менеджер задач (доска/список/Гант) — статическое веб-приложение без сборки. Открывается напрямую как index.html или через любой статический сервер. Эти dev-зависимости используются только для тестов и линтинга и никак не влияют на то, как загружается сама страница.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "vitest": "^5.0.0"
+  }
+}

@@ -1,0 +1,2075 @@
+:root {
+  color-scheme: light;
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --border: #e6e4f0;
+  --text: #22212b;
+  /* Затемнено относительно исходных #77738c/#a8a5b8 (см. Y4 в
+     improvements.html): на белых панелях они давали ~4.55:1 и ~2.40:1
+     контраста — второй заметно ниже WCAG AA (4.5:1 для обычного текста),
+     а первый был на грани. Новые значения дают ~5.4:1 и ~4.9:1 на белом
+     (и не хуже на --bg/--panel), сохраняя faint визуально светлее dim. */
+  --text-dim: #6b687e;
+  --text-faint: #716f7b;
+  --accent: #6d5dfc;
+  --accent-light: #efecff;
+  --accent-hover: #5a49f5;
+  --danger: #e2554a;
+  --danger-light: #fdeceb;
+  --success: #2fb380;
+  --success-light: #e6f8f0;
+  --warn: #e0a63a;
+  --warn-light: #fbf1de;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(30, 20, 60, 0.06), 0 1px 2px rgba(30, 20, 60, 0.04);
+  --shadow-lg: 0 12px 32px rgba(30, 20, 60, 0.14);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+}
+
+/* ---------- Боковая панель (сайдбар): список проектов, Дашборд, Люди ---------- */
+
+.sidebar {
+  background: #fcfbff;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  overflow-y: auto;
+}
+
+.sidebar-top { margin-bottom: 18px; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #a594ff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+.nav-dashboard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 10px;
+  text-align: left;
+}
+.nav-dashboard:hover { background: #f2f0ff; color: var(--text); }
+.nav-dashboard.active { background: var(--accent-light); color: var(--accent-hover); }
+.nav-dashboard-icon { font-size: 14px; }
+
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  padding: 4px 10px;
+  margin-bottom: 2px;
+}
+
+.btn-add-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: all .15s ease;
+}
+.btn-add-project:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.icon-plus { font-weight: 700; }
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: grab;
+  color: var(--text-dim);
+  font-size: 13.5px;
+  user-select: none;
+  border: 1.5px solid transparent;
+}
+
+.project-item:hover { background: #f2f0ff; color: var(--text); }
+
+.project-item.active {
+  background: var(--accent-light);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.project-item.dragging { opacity: 0.4; }
+
+.project-item.drag-over-nest {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.project-item.drag-over-before { box-shadow: 0 -3px 0 0 var(--accent); }
+.project-item.drag-over-after { box-shadow: 0 3px 0 0 var(--accent); }
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  line-height: 1;
+  padding: 0;
+  transition: transform .12s ease;
+}
+.chevron.expanded { transform: rotate(90deg); }
+.chevron-spacer { width: 14px; flex-shrink: 0; }
+
+.project-item .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.project-item .name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-item .count {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.project-item .add-sub-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 3px;
+  line-height: 1;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.project-item:hover .add-sub-btn { opacity: 1; }
+.project-item .add-sub-btn:hover { color: var(--accent); }
+
+.project-list[data-drop-root="1"] { background: var(--accent-light); border-radius: 8px; }
+
+.add-subproject-inline { padding: 2px 4px 4px; }
+
+.sidebar-bottom {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.toggle-completed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sidebar-data-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.btn-data-action {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 6px 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-data-action:hover { border-color: var(--accent); color: var(--accent-hover); background: var(--accent-light); }
+
+/* ---------- Основная область и верхняя панель (название проекта, поиск, переключатель видов) ---------- */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.topbar[hidden] { display: none; }
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.project-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.project-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0;
+  outline: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+.project-title:focus { background: var(--accent-light); }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box input {
+  width: 160px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--bg);
+  outline: none;
+}
+.search-box input:focus { border-color: var(--accent); background: #fff; }
+
+.view-switch {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.view-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.view-btn.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+}
+
+.btn-delete-project {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--text-faint);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.btn-delete-project:hover { background: var(--danger-light); color: var(--danger); }
+
+/* ---------- Фильтры (кнопка + всплывающая панель в топбаре) ---------- */
+
+.filter-box { position: relative; }
+
+.btn-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-filter:hover { border-color: var(--accent); color: var(--accent-hover); }
+.btn-filter.has-active { border-color: var(--accent); background: var(--accent-light); color: var(--accent-hover); font-weight: 600; }
+
+.filter-count {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  width: 220px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.filter-panel[hidden] { display: none; }
+
+.filter-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 3px;
+}
+.filter-field select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.filter-reset-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-reset-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- Вид "Доска" (канбан-колонки) ---------- */
+
+.board-wrap {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 18px 24px;
+}
+
+.board {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  align-items: flex-start;
+}
+
+.section-col {
+  width: 280px;
+  flex-shrink: 0;
+  background: #f5f4fa;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+
+.section-col.drag-over { background: var(--accent-light); outline: 2px dashed var(--accent); }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.section-name {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  min-width: 0;
+}
+.section-name:focus { background: #fff; }
+
+.section-count {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  background: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.section-del {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.section-del:hover { color: var(--danger); background: var(--danger-light); }
+
+.section-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: grab;
+  box-shadow: var(--shadow);
+  transition: box-shadow .15s ease, transform .1s ease;
+}
+.card:hover { box-shadow: var(--shadow-lg); }
+.card.dragging { opacity: 0.4; }
+.card.completed .card-title { text-decoration: line-through; color: var(--text-faint); }
+.card.drop-target-nest, .list-row.drop-target-nest {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--accent-light);
+}
+.card.drop-target-before, .list-row.drop-target-before,
+.tree-row.drop-target-before, .subtask-row.drop-target-before {
+  box-shadow: 0 -3px 0 0 var(--accent);
+}
+.card.drop-target-after, .list-row.drop-target-after,
+.tree-row.drop-target-after, .subtask-row.drop-target-after {
+  box-shadow: 0 3px 0 0 var(--accent);
+}
+
+.badge-subtasks {
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.badge-subtasks.all-done { background: var(--success-light); color: var(--success); }
+
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-check.row-check {
+  margin-top: 1px;
+}
+
+.card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-due { background: var(--bg); color: var(--text-dim); }
+.badge-due.overdue { background: var(--danger-light); color: var(--danger); }
+
+.badge-priority-low { background: var(--success-light); color: var(--success); }
+.badge-priority-medium { background: var(--warn-light); color: var(--warn); }
+.badge-priority-high { background: var(--danger-light); color: var(--danger); }
+
+.badge-blocked { background: var(--danger-light); color: var(--danger); font-weight: 700; }
+
+.gantt-blocked-icon { font-size: 11px; flex-shrink: 0; }
+
+.people-conflict { color: var(--danger); font-size: 11px; }
+
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.tag-chip {
+  font-size: 10px;
+  color: var(--accent-hover);
+  background: var(--accent-light);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+/* Автоматические метки (проект / родительская задача) — визуально те же
+   чипы, что и обычные теги, но приглушённого серого цвета, чтобы сразу
+   читались как "системные", а не введённые вручную. */
+.tag-chip-auto {
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.add-card-btn {
+  margin: 2px 10px 12px;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  text-align: left;
+  font-size: 12.5px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.add-card-btn:hover { background: #fff; color: var(--accent); }
+
+.add-section-col {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.add-section-btn {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  border-radius: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+}
+.add-section-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- Вид "Список" ---------- */
+
+.list-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 24px 24px;
+}
+
+.list-section {
+  margin-bottom: 6px;
+}
+
+.list-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 4px 8px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.list-section-head .section-name {
+  font-size: 14px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0eff7;
+}
+.list-row:hover { background: #f7f6fc; }
+.list-row.dragging { opacity: 0.4; }
+
+.row-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-faint);
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 11px;
+  background: #fff;
+}
+.row-check.checked {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.row-title {
+  flex: 1;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-row.completed .row-title { text-decoration: line-through; color: var(--text-faint); }
+
+.row-tags { display: flex; gap: 4px; flex-shrink: 0; }
+
+.empty-hint {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  padding: 20px 10px;
+  text-align: center;
+}
+
+/* ---------- Панель деталей задачи (большое модальное окно по центру) ---------- */
+/* Раньше это была узкая (360px) панель, прибитая к правому краю экрана —
+   она не давала обзора доски (просто перекрывала её справа) и была тесной
+   для всех полей. Теперь это классический центрированный модальный диалог
+   поверх затемнённого фона, с двумя колонками внутри — больше похоже на
+   карточку задачи в Trello/Asana. */
+
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 28px;
+}
+.detail-overlay[hidden] { display: none; }
+
+.detail-modal {
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 800px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.detail-complete {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-faint);
+  background: #fff;
+  cursor: pointer;
+  color: transparent;
+  font-size: 13px;
+}
+.detail-complete.checked {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.detail-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  color: var(--text-faint);
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.detail-close:hover { background: var(--bg); color: var(--text); }
+
+.detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* Левая колонка (заметки, подзадачи) шире правой (служебные поля) — правая
+   намеренно узкая и с вертикальными подписями, как боковая карточка в
+   Trello, а не привычная широкая строка "лейбл + инпут". */
+.detail-columns {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 8px 32px;
+  align-items: start;
+}
+.detail-col-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.detail-col-meta { display: flex; flex-direction: column; }
+
+@media (max-width: 680px) {
+  .detail-columns { grid-template-columns: 1fr; }
+}
+
+.detail-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  width: fit-content;
+}
+.detail-breadcrumb:hover { background: var(--accent-light); }
+.detail-breadcrumb[hidden] { display: none; }
+
+.detail-subtasks-wrap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.subtask-progress { color: var(--text-faint); font-weight: 600; }
+
+.subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+.subtask-row:hover { background: var(--bg); }
+
+.subtask-row .row-check {
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+}
+
+.subtask-row .subtask-title {
+  flex: 1;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subtask-row.completed .subtask-title { text-decoration: line-through; color: var(--text-faint); }
+
+.subtask-row .subtask-promote,
+.subtask-row .subtask-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.subtask-row .subtask-promote:hover { color: var(--accent); background: var(--accent-light); }
+.subtask-row .subtask-remove:hover { color: var(--danger); background: var(--danger-light); }
+
+/* Блок связей "сначала выполнить" — тот же паттерн, что и у подзадач */
+.detail-deps-wrap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.deps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.dep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.dep-row:hover { background: var(--bg); }
+.dep-row .dep-status { flex-shrink: 0; font-size: 12px; color: var(--success); }
+.dep-row.blocking .dep-status { color: var(--danger); }
+.dep-row .dep-title {
+  flex: 1;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dep-row.blocking .dep-title { color: var(--danger); }
+.dep-row .dep-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.dep-row .dep-remove:hover { color: var(--danger); background: var(--danger-light); }
+
+#depsAddSelect {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text-dim);
+  outline: none;
+}
+#depsAddSelect:focus { border-color: var(--accent); background: #fff; }
+
+/* Предупреждение о занятости исполнителя в панели деталей */
+.conflict-warning {
+  margin: -6px 0 14px;
+  padding: 8px 10px;
+  background: var(--danger-light);
+  color: var(--danger);
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.detail-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  padding: 4px;
+  border-radius: 6px;
+  height: 34px;
+  /* .detail-title — прямой flex-item в .detail-body (flex-direction:column),
+     а .detail-columns рядом с ним требует куда больше места, чем есть в
+     ограниченном по высоте модальном окне. По умолчанию textarea (в
+     отличие от div) имеет overflow:auto, поэтому его "автоматический
+     минимальный размер" во флексбоксе считается равным 0 — и весь дефицит
+     высоты флекс-контейнер забирает именно у него, сжимая до нескольких
+     пикселей и накладывая буквы друг на друга. flex-shrink:0 запрещает
+     это сжатие: недостаток места вместо этого уходит в скролл
+     .detail-body (overflow-y:auto), а не в раздавленный заголовок. */
+  flex-shrink: 0;
+}
+.detail-title:focus { background: var(--bg); }
+
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+.detail-field label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.detail-field input, .detail-field select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  outline: none;
+  min-width: 0;
+}
+
+.detail-auto-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.detail-auto-tags:empty { display: none; }
+.detail-field input:focus, .detail-field select:focus { border-color: var(--accent); background: #fff; }
+.detail-field input:disabled { color: var(--text-faint); cursor: not-allowed; }
+
+.dates-auto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -6px 0 14px;
+  padding: 6px 9px;
+  background: var(--accent-light);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--accent-hover);
+}
+.dates-auto-row button {
+  border: none;
+  background: #fff;
+  color: var(--accent-hover);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dates-auto-row button:hover { background: var(--accent); color: #fff; }
+.dates-auto-row[hidden] { display: none; }
+
+.detail-notes-wrap label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.detail-notes {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  outline: none;
+  resize: vertical;
+}
+.detail-notes:focus { border-color: var(--accent); background: #fff; }
+
+.btn-delete-task {
+  margin-top: 6px;
+  padding: 9px;
+  border: 1px solid var(--danger-light);
+  background: var(--danger-light);
+  color: var(--danger);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-delete-task:hover { background: var(--danger); color: #fff; }
+
+/* ---------- Полосы прокрутки ---------- */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #ddd9ec; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Встроенные поля быстрого добавления (задача/проект/подпроект) ---------- */
+
+.add-project-inline { margin-bottom: 10px; }
+.add-project-inline input,
+.inline-add-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+}
+
+.inline-add-row { padding: 2px 10px 12px; }
+.list-wrap .inline-add-row { padding: 2px 4px 12px; }
+
+/* ---------- Модальное окно (замена alert/confirm) ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 40, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-overlay[hidden] { display: none; }
+
+.modal-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 22px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-message {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.modal-btn:hover { background: var(--bg); }
+.modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal-btn.primary:hover { background: var(--accent-hover); }
+.modal-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.modal-btn.danger:hover { background: #c8453b; }
+
+/* ---------- Дашборд (сводка по всем проектам) ---------- */
+
+.dashboard-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 60px;
+}
+
+.dashboard { max-width: 1080px; margin: 0 auto; }
+
+.dashboard-header {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 22px;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.kpi-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
+.kpi-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.kpi-card.warn .kpi-value { color: var(--danger); }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+.dash-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.dash-section h2 {
+  font-size: 14px;
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+
+.dash-empty { color: var(--text-faint); font-size: 12.5px; padding: 8px 0; }
+
+/* дерево проектов со сводным прогрессом (внутри дашборда) */
+
+.proj-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.proj-tree-row:hover { background: var(--bg); }
+.proj-tree-row .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.proj-tree-row .pname { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-tree-row .pbar-wrap { flex: 1; min-width: 60px; }
+.proj-tree-row .pstats { font-size: 11.5px; color: var(--text-faint); flex-shrink: 0; white-space: nowrap; }
+.proj-tree-row .pstats.has-overdue { color: var(--danger); font-weight: 600; }
+
+.progress-bar {
+  height: 6px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* списки просроченных / ближайших задач (внутри дашборда) */
+
+.mini-task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.mini-task-row:hover { background: var(--bg); }
+.mini-task-row .mt-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-task-row .mt-project {
+  font-size: 10.5px;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.mini-task-row .mt-due { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+.mini-task-row .mt-due.overdue { color: var(--danger); font-weight: 700; }
+
+/* загрузка исполнителей по часам (внутри дашборда) */
+
+.assignee-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  font-size: 12.5px;
+}
+.assignee-row .aname { width: 100px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assignee-row .abar-wrap { flex: 1; }
+.assignee-row .acount { width: 62px; text-align: right; flex-shrink: 0; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+
+/* ---------- Виды "По статусам" и "Структура" (иерархический список задач) ---------- */
+
+.tree-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tree-wrap[hidden] { display: none; }
+
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.tree-collapse-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tree-collapse-btn:hover { background: var(--accent-light); color: var(--accent-hover); border-color: var(--accent); }
+
+.tree-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 24px 40px;
+}
+
+.tree-section { margin-bottom: 18px; }
+
+.tree-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.tree-rows { display: flex; flex-direction: column; }
+
+.tree-project-root {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 6px 12px 0;
+  font-size: 16px;
+  font-weight: 800;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 6px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.tree-project-root .dot { width: 11px; height: 11px; flex-shrink: 0; }
+.tree-project-root-name { flex: 1; }
+.tree-project-root .section-count { font-size: 12px; font-weight: 700; }
+
+/* Строка-подпроект внутри дерева "Структуры"/"Гантта" — визуально
+   отличается от обычной задачи (нет чекбокса, жирнее, лёгкий фон), чтобы
+   сразу было видно, что это ветка другого проекта, а не задача. */
+.structure-project-row {
+  background: #f8f7fd;
+  font-weight: 700;
+  cursor: default;
+}
+.structure-project-row:hover { background: #f2effc; }
+.structure-project-row .dot { width: 9px; height: 9px; flex-shrink: 0; }
+.structure-project-row .structure-project-title { cursor: pointer; }
+.structure-project-row .structure-project-title:hover { color: var(--accent-hover); text-decoration: underline; }
+.structure-project-row .section-count { font-size: 11px; color: var(--text-faint); font-weight: 600; }
+
+.status-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-dim);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 6px;
+  border-radius: 6px;
+  cursor: grab;
+  border-bottom: 1px solid #f5f4fa;
+}
+.tree-row:hover { background: #f7f6fc; }
+.tree-row:hover .tree-actions { opacity: 1; }
+.tree-row.dragging { opacity: 0.4; }
+.tree-row.drop-target-nest { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--accent-light); }
+.tree-row.completed .tree-title { text-decoration: line-through; color: var(--text-faint); }
+
+/* чем глубже уровень вложенности подзадачи, тем сильнее оттенок фона строки —
+   так вложенность видно сразу, а не только по величине отступа слева */
+.tree-row.depth-1 { background: #faf9ff; }
+.tree-row.depth-1:hover { background: #f3f1fd; }
+.tree-row.depth-2 { background: #f6f4fe; }
+.tree-row.depth-2:hover { background: #efecfc; }
+.tree-row.depth-3 { background: #f2effd; }
+.tree-row.depth-3:hover { background: #ebe7fb; }
+.tree-row.depth-4 { background: #eeebfc; }
+.tree-row.depth-4:hover { background: #e7e2fa; }
+.tree-row.depth-1 .tree-title, .tree-row.depth-2 .tree-title,
+.tree-row.depth-3 .tree-title, .tree-row.depth-4 .tree-title { font-size: 12.5px; color: var(--text-dim); }
+
+/* Направляющие линии дерева (задачи/подзадачи в видах "По статусам",
+   "Структура" и левая колонка "Гантта"). Каждая задача получает одну
+   ячейку-"уголок" на каждый уровень вложенности выше неё:
+   - .indent-guide  — сквозная вертикальная линия, предок на этом уровне
+     ещё не закончился (у него будут ещё дети/строки ниже);
+   - .indent-guide-blank — пусто: у предка на этом уровне это была
+     последняя ветка, линии дальше нет — не путать её с чужой веткой;
+   - .indent-elbow-mid ("├") — сама задача не последняя среди своих
+     соседей: линия идёт и вверх, и вниз, с отводом вправо к названию;
+   - .indent-elbow-last ("└") — задача последняя среди соседей: линия
+     обрывается на середине этой строки, дальше вниз не идёт. */
+.indent-guide, .indent-elbow {
+  width: 26px;
+  align-self: stretch;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.indent-guide::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: -7px;
+  bottom: -7px;
+  width: 2px;
+  background: var(--border);
+}
+.indent-guide-blank::before { content: none; }
+
+.indent-elbow-mid::before,
+.indent-elbow-last::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: -7px;
+  width: 2px;
+  background: var(--border);
+}
+.indent-elbow-mid::before { bottom: -7px; }
+.indent-elbow-last::before { bottom: 50%; }
+
+.indent-elbow-mid::after,
+.indent-elbow-last::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 13px;
+  height: 2px;
+  background: var(--border);
+}
+
+.tree-title {
+  flex: 1;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.tree-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity .1s ease;
+}
+.tree-actions button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+.tree-actions button:hover { color: var(--accent); background: var(--accent-light); }
+.tree-actions button:disabled { opacity: 0.3; cursor: default; }
+.tree-actions button:disabled:hover { color: var(--text-faint); background: transparent; }
+
+/* ---------- Диаграмма Ганта ---------- */
+
+.gantt-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.gantt-wrap[hidden] { display: none; }
+
+.gantt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.gantt-toolbar-label { font-size: 12px; color: var(--text-dim); margin-right: 2px; }
+.gantt-toolbar-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.gantt-zoom-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.gantt-zoom-btn:hover { background: var(--accent-light); color: var(--accent-hover); border-color: var(--accent); }
+#ganttZoomSlider { width: 140px; accent-color: var(--accent); }
+.gantt-zoom-value { font-size: 11.5px; color: var(--text-faint); width: 62px; }
+
+.gantt-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 0 0 40px;
+}
+
+.gantt { display: flex; flex-direction: column; min-width: fit-content; }
+
+.gantt-header-row {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.gantt-months-row { height: 26px; }
+.gantt-days-row { top: 26px; }
+
+.gantt-month {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 6px 0;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gantt-name-cell {
+  width: var(--gantt-name-width, 260px);
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-right: 1px solid var(--border);
+  font-size: 12.5px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.gantt-corner { position: relative; z-index: 3; font-weight: 700; font-size: 12px; cursor: default; }
+
+/* Строка-подпроект в левой колонке Гантта — та же особая раскраска, что и
+   в "Структуре", но явно переопределяем фон/курсор .gantt-name-cell (их
+   специфичность совпадает с .structure-project-row, а этот файл читается
+   ниже, поэтому без переопределения именно .gantt-name-cell победил бы). */
+.gantt-name-cell.structure-project-row { background: #f8f7fd; cursor: default; font-weight: 700; }
+.gantt-row-project:hover .gantt-name-cell.structure-project-row { background: #f2effc; }
+
+/* Ручка на границе колонки "Задача" — есть в КАЖДОЙ строке (не только в
+   шапке), так что колонку можно потянуть, ухватившись на любой высоте, а
+   не только за заголовок. Все ручки соседних строк примыкают друг к другу
+   и визуально образуют одну сплошную полосу вдоль всей границы колонки.
+   Держим её строго внутри ячейки (right:0), а не наполовину за её
+   пределами — иначе overflow:hidden на ячейке обрезал бы половину зоны
+   захвата. Ширина применяется через CSS-переменную --gantt-name-width
+   сразу ко всей колонке во всех строках разом. */
+.gantt-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 4;
+}
+.gantt-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
+}
+.gantt-resize-handle:hover::after, .gantt-resize-handle.active::after { background: var(--accent); }
+
+.gantt-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-days { display: flex; }
+
+.gantt-day {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding: 10px 0;
+  border-right: 1px solid #f0eff7;
+}
+.gantt-day.is-weekend { background: #eeecf6; }
+.gantt-day.is-today { background: var(--accent-light); color: var(--accent-hover); font-weight: 700; }
+
+.gantt-row { display: flex; border-bottom: 1px solid #f5f4fa; height: 36px; }
+.gantt-row:hover { background: #f7f6fc; }
+.gantt-row:hover .gantt-name-cell { background: #f7f6fc; }
+
+/* Заливка выходных вдоль всей строки, не только в шапке — переменные
+   --gantt-day-width/--gantt-weekend-offset задаются один раз на весь
+   Гант в renderGantt() (js/app.js), чтобы столбцы совпадали с реальными
+   субботами/воскресеньями от начала шкалы. */
+.gantt-timeline-cell {
+  position: relative;
+  flex-shrink: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    #eeecf6 0, #eeecf6 var(--gantt-day-width, 30px),
+    transparent var(--gantt-day-width, 30px), transparent calc(var(--gantt-day-width, 30px) * 6),
+    #eeecf6 calc(var(--gantt-day-width, 30px) * 6), #eeecf6 calc(var(--gantt-day-width, 30px) * 7)
+  );
+  background-position: var(--gantt-weekend-offset, 0) 0;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 7px;
+  height: 22px;
+  border-radius: 5px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.gantt-bar.done { opacity: 0.45; }
+.gantt-bar-summary {
+  top: 10px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.18), var(--shadow);
+}
+
+/* ---------- Экран "Люди" (справочник исполнителей) ---------- */
+
+.people-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 60px;
+}
+
+.people { max-width: 900px; margin: 0 auto; }
+
+.people-header { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+.people-sub { font-size: 12.5px; color: var(--text-dim); margin-bottom: 22px; }
+
+.people-table {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: 1.4fr 110px 90px 1fr 32px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.people-row:last-child { border-bottom: none; }
+
+.people-row-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-faint);
+  background: var(--bg);
+}
+
+.people-name-input {
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.people-name-input:focus { background: var(--bg); outline: none; }
+
+.people-hours-input {
+  width: 70px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.people-hours-input:focus { border-color: var(--accent); background: #fff; outline: none; }
+
+.people-stat { font-size: 12.5px; color: var(--text-dim); }
+
+.people-util-wrap { display: flex; align-items: center; gap: 8px; }
+.people-util-label { font-size: 11px; color: var(--text-faint); width: 56px; flex-shrink: 0; text-align: right; }
+
+.people-del {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.people-del:hover { color: var(--danger); background: var(--danger-light); }
+
+.people-add-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+/* ---------- корзина ---------- */
+
+.trash-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 60px;
+}
+.trash { max-width: 900px; margin: 0 auto; }
+
+.nav-trash-count {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.trash-empty-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+.trash-empty-btn:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-light); }
+
+.trash-list {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.trash-row:last-child { border-bottom: none; }
+
+.trash-row-title { font-size: 13.5px; font-weight: 600; }
+.trash-row-extra { font-weight: 400; color: var(--text-faint); font-size: 12px; }
+.trash-row-meta { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+
+.trash-row-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.trash-row-actions button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.trash-row-actions button:hover { background: var(--accent-light); color: var(--accent-hover); border-color: var(--accent); }
+.trash-row-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
+.trash-row-actions button.trash-purge:hover { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+.people-add-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+/* ---------- окно аналитики по проекту (js/analytics.js) ---------- */
+
+.project-item .project-analytics-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 3px;
+  line-height: 1;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.project-item:hover .project-analytics-btn { opacity: 1; }
+.project-item .project-analytics-btn:hover { color: var(--accent); }
+
+.analytics-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 40, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 28px;
+}
+.analytics-overlay[hidden] { display: none; }
+
+.analytics-modal {
+  background: var(--panel);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 760px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.analytics-title { font-size: 17px; font-weight: 800; }
+
+.analytics-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px 28px;
+  min-height: 0;
+}
+
+.an-problems.an-ok h2 { color: var(--success); margin: 0; }
+.an-problems h2 { color: var(--danger); }
+.an-problem-list { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.9; }
+
+.an-bar-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 24px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+.an-bar-label { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-bar-value { text-align: right; font-weight: 700; color: var(--text-dim); }
+
+.an-issue-list { display: flex; flex-direction: column; gap: 6px; }
+.an-issue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.an-issue-row:last-child { border-bottom: none; }
+.an-issue-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-issue-meta { color: var(--text-faint); flex-shrink: 0; }
+.an-issue-more { color: var(--text-faint); font-size: 11.5px; padding-top: 2px; }
+
+.an-assignee-table { display: flex; flex-direction: column; gap: 4px; }
+.an-assignee-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr 100px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.an-assignee-row:last-child { border-bottom: none; }
+.an-assignee-name { font-weight: 600; }
+.an-assignee-overdue { color: var(--danger); font-weight: 600; }
+.an-assignee-hours { text-align: right; color: var(--text-faint); }
+
+.an-subproject-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- Тост (всплывающее уведомление внизу экрана) ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #232131;
+  color: #fff;
+  padding: 12px 14px 12px 18px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  font-size: 13.5px;
+  animation: toast-in .18s ease;
+}
+.toast[hidden] { display: none; }
+.toast-message { white-space: nowrap; }
+.toast-undo {
+  background: transparent;
+  border: none;
+  color: #b9aeff;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.toast-undo:hover { background: rgba(255, 255, 255, 0.12); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ---------- Командная палитра (Ctrl+K) ---------- */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 40, 0.35);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  z-index: 210;
+}
+.palette-overlay[hidden] { display: none; }
+
+.palette-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 560px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.palette-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 18px;
+  font-size: 15px;
+  outline: none;
+  font-family: inherit;
+  color: var(--text);
+}
+.palette-input::placeholder { color: var(--text-faint); }
+
+.palette-results {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.palette-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.palette-group-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-faint);
+  padding: 8px 10px 4px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.palette-item.active { background: var(--accent-light); }
+.palette-item-icon {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  color: var(--text-faint);
+}
+.palette-item-title {
+  flex: 1;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-item-title mark {
+  background: none;
+  color: var(--accent-hover);
+  font-weight: 700;
+}
+.palette-item-meta {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hint {
+  border-top: 1px solid var(--border);
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .detail-overlay { padding: 0; }
+  .detail-modal { max-width: 100%; height: 100%; border-radius: 0; }
+  .analytics-overlay { padding: 0; }
+  .analytics-modal { max-width: 100%; height: 100%; border-radius: 0; }
+}
