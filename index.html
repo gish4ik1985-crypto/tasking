@@ -114,7 +114,8 @@
         <div class="filter-box">
           <button class="btn-filter" id="membersToggleBtn" title="Участники проекта — видят все задачи проекта">👥 Участники</button>
           <div class="filter-panel" id="membersPanel" hidden>
-            <div class="members-list" id="membersList"></div>
+            <select id="membersAdd"><option value="">+ Добавить участника…</option></select>
+            <div class="members-chips" id="membersList"></div>
           </div>
         </div>
         <div class="view-switch" id="viewSwitch">
@@ -244,7 +245,8 @@
 
             <div class="detail-field">
               <label>Наблюдатели</label>
-              <div class="watchers-list" id="detailWatchers"></div>
+              <select id="detailWatchersAdd"><option value="">+ Добавить наблюдателя…</option></select>
+              <div class="watchers-chips" id="detailWatchers"></div>
             </div>
 
             <!-- Предупреждение, что у исполнителя в эти же даты уже есть

@@ -652,6 +652,7 @@
   const membersToggleBtn = document.getElementById("membersToggleBtn");
   const membersPanel = document.getElementById("membersPanel");
   const membersList = document.getElementById("membersList");
+  const membersAdd = document.getElementById("membersAdd");
 
   const modalOverlay = document.getElementById("modalOverlay");
   const modalMessage = document.getElementById("modalMessage");
@@ -705,6 +706,7 @@
   const detailSection = document.getElementById("detailSection");
   const detailAssignee = document.getElementById("detailAssignee");
   const detailWatchers = document.getElementById("detailWatchers");
+  const detailWatchersAdd = document.getElementById("detailWatchersAdd");
   const detailStart = document.getElementById("detailStart");
   const detailDue = document.getElementById("detailDue");
   const datesAutoRow = document.getElementById("datesAutoRow");
@@ -1710,27 +1712,37 @@
     renderFilterControls();
   }
 
-  // Список пользователей с чекбоксами: кто из них состоит в участниках
-  // текущего проекта (js/sync.js — project.members) и поэтому видит ВСЕ
-  // его задачи, а не только свои/назначенные.
+  // Кто состоит в участниках текущего проекта (js/sync.js — project.members)
+  // и поэтому видит ВЕСЬ проект целиком, а не только свои/назначенные
+  // задачи. Список "кого добавить" пересобирается из state.users каждый
+  // раз заново, так что новые люди (только что вошедшие впервые) сразу
+  // оказываются доступны для выбора, без отдельных действий.
   function renderMembersPanel(proj) {
-    if (!state.users.length) {
-      membersList.innerHTML = `<div class="members-list-empty">Список людей пуст — добавьте их на экране «Люди» или дождитесь, пока кто-то войдёт в приложение.</div>`;
-      return;
-    }
-    const members = new Set(proj.members || []);
-    membersList.innerHTML = state.users.map((u) => `
-      <label><input type="checkbox" data-member-id="${u.id}" ${members.has(u.id) ? "checked" : ""}> ${escapeHtml(u.name)}</label>
-    `).join("");
-    membersList.querySelectorAll("[data-member-id]").forEach((cb) => {
-      cb.addEventListener("change", () => {
+    const usersById = {};
+    state.users.forEach((u) => { usersById[u.id] = u; });
+    const memberIds = (proj.members || []).filter((id) => usersById[id]);
+
+    membersList.innerHTML = memberIds.length
+      ? memberIds.map((id) => `
+          <span class="person-chip" style="--chip-color:${usersById[id].color || "#6d5dfc"}">
+            ${escapeHtml(usersById[id].name)}
+            <button type="button" data-remove-member="${id}" title="Убрать из участников" aria-label="Убрать ${escapeHtml(usersById[id].name)} из участников">×</button>
+          </span>
+        `).join("")
+      : `<div class="members-list-empty">Участников нет</div>`;
+    membersList.querySelectorAll("[data-remove-member]").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const current = getActiveProject();
-        const set = new Set(current.members || []);
-        if (cb.checked) set.add(cb.dataset.memberId); else set.delete(cb.dataset.memberId);
-        current.members = [...set];
+        current.members = (current.members || []).filter((id) => id !== btn.dataset.removeMember);
         commit(true);
+        renderMembersPanel(current);
       });
     });
+
+    const remaining = state.users.filter((u) => !memberIds.includes(u.id));
+    membersAdd.innerHTML = `<option value="">+ Добавить участника…</option>` +
+      remaining.map((u) => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
+    membersAdd.disabled = !remaining.length;
   }
 
   // Обновляет содержимое панели фильтров под текущий проект: список
@@ -3138,24 +3150,35 @@
   // это список из нескольких людей; каждый из них может отметить задачу
   // выполненной и писать заметку, как и исполнитель, но не создатель.
   function renderWatchers(task) {
-    if (!state.users.length) {
-      detailWatchers.innerHTML = `<div class="watchers-list-empty">Список людей пуст</div>`;
-      return;
-    }
-    const watchers = new Set(task.watchers || []);
-    detailWatchers.innerHTML = state.users.map((u) => `
-      <label><input type="checkbox" data-watcher-id="${u.id}" ${watchers.has(u.id) ? "checked" : ""}> ${escapeHtml(u.name)}</label>
-    `).join("");
-    detailWatchers.querySelectorAll("[data-watcher-id]").forEach((cb) => {
-      cb.addEventListener("change", () => {
+    const usersById = {};
+    state.users.forEach((u) => { usersById[u.id] = u; });
+    const watcherIds = (task.watchers || []).filter((id) => usersById[id]);
+
+    detailWatchers.innerHTML = watcherIds.length
+      ? watcherIds.map((id) => `
+          <span class="person-chip" style="--chip-color:${usersById[id].color || "#6d5dfc"}">
+            ${escapeHtml(usersById[id].name)}
+            <button type="button" data-remove-watcher="${id}" title="Убрать из наблюдателей" aria-label="Убрать ${escapeHtml(usersById[id].name)} из наблюдателей">×</button>
+          </span>
+        `).join("")
+      : `<div class="watchers-list-empty">Наблюдателей нет</div>`;
+    detailWatchers.querySelectorAll("[data-remove-watcher]").forEach((btn) => {
+      btn.addEventListener("click", () => {
         const t = currentTask();
         if (!t) return;
-        const set = new Set(t.watchers || []);
-        if (cb.checked) set.add(cb.dataset.watcherId); else set.delete(cb.dataset.watcherId);
-        t.watchers = [...set];
+        t.watchers = (t.watchers || []).filter((id) => id !== btn.dataset.removeWatcher);
         commit(true);
+        renderWatchers(t);
       });
     });
+
+    // Список "кого ещё можно добавить" — всегда пересобирается заново из
+    // state.users, поэтому и новые люди (только что вошедшие в первый раз),
+    // и уже существующие сразу попадают сюда сами, без отдельных действий.
+    const remaining = state.users.filter((u) => !watcherIds.includes(u.id));
+    detailWatchersAdd.innerHTML = `<option value="">+ Добавить наблюдателя…</option>` +
+      remaining.map((u) => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
+    detailWatchersAdd.disabled = !remaining.length;
   }
 
   // Открывает панель справа и заполняет все её поля данными выбранной
@@ -3259,7 +3282,8 @@
     // не зависит от readOnly — иначе назначенный на задачу человек не мог
     // бы добавить в неё ни одной подзадачи.
     depsAddSelect.disabled = readOnly;
-    detailWatchers.querySelectorAll("input").forEach((cb) => { cb.disabled = readOnly; });
+    if (readOnly) detailWatchersAdd.disabled = true;
+    detailWatchers.querySelectorAll("[data-remove-watcher]").forEach((btn) => { btn.disabled = readOnly; });
     // Участник проекта, который видит эту задачу только потому, что видит
     // весь проект (не создатель, не исполнитель, не наблюдатель) — не
     // может даже отмечать её выполненной, в отличие от исполнителя/
@@ -3453,6 +3477,18 @@
   // задачу. Здесь же — кнопка авто/ручной режим дат и удаление задачи.
   function bindDetailEvents() {
     detailClose.addEventListener("click", closeDetail);
+
+    detailWatchersAdd.addEventListener("change", () => {
+      const id = detailWatchersAdd.value;
+      if (!id) return;
+      const t = currentTask();
+      if (!t) return;
+      const set = new Set(t.watchers || []);
+      set.add(id);
+      t.watchers = [...set];
+      commit(true);
+      renderWatchers(t);
+    });
 
     // Клик по затемнённому фону вокруг модального окна тоже закрывает его
     // (клик внутри самой карточки задачи сюда не доходит — target будет
@@ -4342,6 +4378,16 @@
     membersPanel.hidden = !membersPanel.hidden;
   });
   membersPanel.addEventListener("click", (e) => e.stopPropagation());
+  membersAdd.addEventListener("change", () => {
+    const id = membersAdd.value;
+    if (!id) return;
+    const proj = getActiveProject();
+    const set = new Set(proj.members || []);
+    set.add(id);
+    proj.members = [...set];
+    commit(true);
+    renderMembersPanel(proj);
+  });
   document.addEventListener("click", () => { membersPanel.hidden = true; });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !membersPanel.hidden) membersPanel.hidden = true;

@@ -2353,23 +2353,54 @@ body {
 }
 .profile-panel[hidden] { display: none; }
 
-.watchers-list, .members-list {
+/* Наблюдатели задачи / участники проекта: выпадающий список "+ Добавить"
+   (уже видом select, как остальные поля формы) плюс уже выбранные люди
+   ниже — компактными "чипами" с крестиком убрать, а не колонкой
+   чекбоксов на весь список пользователей. */
+#detailWatchersAdd, #membersAdd {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg);
+  outline: none;
+}
+#detailWatchersAdd:disabled, #membersAdd:disabled { color: var(--text-faint); cursor: not-allowed; }
+
+.watchers-chips, .members-chips {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 160px;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 120px;
   overflow-y: auto;
 }
-.watchers-list label, .members-list label {
-  display: flex;
+.person-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--chip-color, var(--accent)) 35%, transparent);
+  font-size: 12px;
   font-weight: 500;
   color: var(--text);
-  cursor: pointer;
 }
-.watchers-list label input, .members-list label input { margin: 0; }
+.person-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 50%;
+}
+.person-chip button:hover { background: rgba(0, 0, 0, 0.08); color: var(--text); }
+.person-chip button:disabled { cursor: not-allowed; opacity: 0.5; }
 .watchers-list-empty, .members-list-empty { font-size: 12px; color: var(--text-faint); }
 
 .profile-views-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
