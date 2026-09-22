@@ -110,6 +110,12 @@
           </div>
         </div>
         <button class="btn-filter" id="archiveCompletedBtn" title="Убрать все выполненные задачи этого проекта из обычных видов в архив">🗄 В архив</button>
+        <div class="filter-box">
+          <button class="btn-filter" id="membersToggleBtn" title="Участники проекта — видят все задачи проекта">👥 Участники</button>
+          <div class="filter-panel" id="membersPanel" hidden>
+            <div class="members-list" id="membersList"></div>
+          </div>
+        </div>
         <div class="view-switch" id="viewSwitch">
           <button class="view-btn active" data-view="board">Доска</button>
           <button class="view-btn" data-view="list">Список</button>
@@ -233,6 +239,11 @@
             <div class="detail-field">
               <label>Исполнитель</label>
               <select id="detailAssignee"></select>
+            </div>
+
+            <div class="detail-field">
+              <label>Наблюдатели</label>
+              <div class="watchers-list" id="detailWatchers"></div>
             </div>
 
             <!-- Предупреждение, что у исполнителя в эти же даты уже есть

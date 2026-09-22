@@ -2214,6 +2214,25 @@ body {
 }
 .profile-panel[hidden] { display: none; }
 
+.watchers-list, .members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.watchers-list label, .members-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.watchers-list label input, .members-list label input { margin: 0; }
+.watchers-list-empty, .members-list-empty { font-size: 12px; color: var(--text-faint); }
+
 .profile-views-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .profile-view-check {
   display: flex;

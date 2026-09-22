@@ -31,6 +31,7 @@
       title: t.title || "",
       notes: t.description || "",
       assigneeId: t.assigneeId || null,
+      watchers: Array.isArray(t.watchers) ? t.watchers : [],
       start: t.startDate || "",
       due: t.dueDate || "",
       datesAuto: t.datesAuto !== false && t.datesAuto !== "false",
@@ -71,6 +72,7 @@
       name: p.name || "Проект",
       color: p.color || PROJECT_COLORS[i % PROJECT_COLORS.length],
       parentId: p.parentId || null,
+      members: Array.isArray(p.members) ? p.members : [],
       _creatorId: p.creatorId || "",
       _canEdit: !!p.canEdit,
       sections: (sectionsByProject[p.id] || []).map((s) => ({ id: s.id, name: s.name })),
@@ -217,7 +219,7 @@
   }
 
   function projectPayload(p) {
-    return JSON.stringify({ id: p.id, name: p.name, color: p.color, parentId: p.parentId || null });
+    return JSON.stringify({ id: p.id, name: p.name, color: p.color, parentId: p.parentId || null, members: p.members || [] });
   }
   function sectionPayload(s, projectId, order) {
     return JSON.stringify({ id: s.id, projectId, name: s.name, order });
@@ -225,7 +227,7 @@
   function taskPayload(t, projectId) {
     return JSON.stringify({
       id: t.id, projectId, sectionId: t.sectionId, parentTaskId: t.parentTaskId || "",
-      title: t.title, description: t.notes || "", assigneeId: t.assigneeId || "",
+      title: t.title, description: t.notes || "", assigneeId: t.assigneeId || "", watchers: t.watchers || [],
       priority: t.priority || "medium", completed: !!t.completed,
       startDate: t.start || "", dueDate: t.due || "", datesAuto: !!t.datesAuto,
       estimateHours: t.estimateHours == null ? "" : t.estimateHours,

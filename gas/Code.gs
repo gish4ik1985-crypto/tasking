@@ -20,12 +20,17 @@
  *  - Редактировать/удалять проект, раздел или задачу может только тот,
  *    кто их создал (creatorId).
  *  - Исключение: если задача назначена (assigneeId) на другого
- *    пользователя — он не создатель, но может отметить её выполненной и
- *    писать в описание/заметки. Остальные поля (сроки, приоритет,
- *    исполнитель, раздел, теги, зависимости) ему менять нельзя.
- *  - Пользователь видит только те задачи, которые сам создал, или те,
- *    что назначены на него — плюс минимальный контекст (название
+ *    пользователя, или он в списке наблюдателей (watchers) этой задачи —
+ *    он не создатель, но может отметить её выполненной и писать в
+ *    описание/заметки. Остальные поля (сроки, приоритет, исполнитель,
+ *    раздел, теги, зависимости) ему менять нельзя.
+ *  - Пользователь видит только те задачи, которые сам создал, назначены
+ *    на него, или где он наблюдатель — плюс минимальный контекст (название
  *    проекта/раздела) для этих задач.
+ *  - Участник проекта (project.members, управляет только автор проекта)
+ *    видит ВСЕ задачи и разделы этого проекта целиком (а не только свои/
+ *    назначенные), но редактировать может только то, что создал сам или
+ *    на что назначен/где наблюдатель — как обычно.
  */
 
 var SHEET_USERS = 'Users';
@@ -40,9 +45,9 @@ var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
 var SCHEMAS = {};
 SCHEMAS[SHEET_USERS] = ['id', 'login', 'passwordHash', 'name', 'color', 'weeklyHours', 'visibleViews'];
 SCHEMAS[SHEET_SESSIONS] = ['token', 'userId', 'expiresAt'];
-SCHEMAS[SHEET_PROJECTS] = ['id', 'name', 'color', 'parentId', 'creatorId', 'archived', 'createdAt', 'updatedAt'];
+SCHEMAS[SHEET_PROJECTS] = ['id', 'name', 'color', 'parentId', 'creatorId', 'members', 'archived', 'createdAt', 'updatedAt'];
 SCHEMAS[SHEET_SECTIONS] = ['id', 'projectId', 'name', 'order'];
-SCHEMAS[SHEET_TASKS] = ['id', 'projectId', 'sectionId', 'parentTaskId', 'title', 'description', 'assigneeId', 'creatorId',
+SCHEMAS[SHEET_TASKS] = ['id', 'projectId', 'sectionId', 'parentTaskId', 'title', 'description', 'assigneeId', 'creatorId', 'watchers',
   'priority', 'completed', 'startDate', 'dueDate', 'datesAuto', 'estimateHours', 'order', 'tags', 'dependencies', 'archived',
   'createdAt', 'updatedAt'];
 SCHEMAS[SHEET_VIEWS] = ['userId', 'taskId', 'viewedAt'];
@@ -189,11 +194,24 @@ function requireSession(token) {
 // ---------- State (только своё + то, что назначено) ----------
 
 function handleGetState(userId) {
-  var allTasks = readRows(SHEET_TASKS);
-  var visibleTasks = allTasks.filter(function (t) { return t.creatorId === userId || t.assigneeId === userId; });
-
   var allProjects = readRows(SHEET_PROJECTS);
   var allSections = readRows(SHEET_SECTIONS);
+  var allTasks = readRows(SHEET_TASKS);
+
+  // Проекты, где userId — автор или в списке участников (project.members):
+  // такой пользователь видит ВЕСЬ проект целиком, а не только свои задачи.
+  var memberProjectIds = {};
+  allProjects.forEach(function (p) {
+    var isOwn = p.creatorId === userId;
+    var isMember = safeJson(p.members, []).indexOf(userId) !== -1;
+    if (isOwn || isMember) memberProjectIds[p.id] = true;
+  });
+
+  var visibleTasks = allTasks.filter(function (t) {
+    if (t.creatorId === userId || t.assigneeId === userId) return true;
+    if (safeJson(t.watchers, []).indexOf(userId) !== -1) return true;
+    return !!memberProjectIds[t.projectId];
+  });
 
   var refProjectIds = uniq(visibleTasks.map(function (t) { return t.projectId; }));
   var refSectionIds = uniq(visibleTasks.map(function (t) { return t.sectionId; }));
@@ -202,15 +220,19 @@ function handleGetState(userId) {
   allProjects.forEach(function (p) {
     var isOwn = p.creatorId === userId;
     var isRef = refProjectIds.indexOf(p.id) !== -1;
-    if (isOwn || isRef) projectsById[p.id] = Object.assign({}, p, { canEdit: isOwn });
+    if (isOwn || memberProjectIds[p.id] || isRef) {
+      projectsById[p.id] = Object.assign({}, p, { members: safeJson(p.members, []), canEdit: isOwn });
+    }
   });
 
   var sectionsById = {};
   allSections.forEach(function (s) {
     var parentProject = projectsById[s.projectId];
-    var isOwn = parentProject && parentProject.canEdit;
+    if (!parentProject) return;
     var isRef = refSectionIds.indexOf(s.id) !== -1;
-    if (isOwn || isRef) sectionsById[s.id] = Object.assign({}, s, { canEdit: !!isOwn });
+    if (parentProject.canEdit || memberProjectIds[s.projectId] || isRef) {
+      sectionsById[s.id] = Object.assign({}, s, { canEdit: !!parentProject.canEdit });
+    }
   });
 
   var views = readRows(SHEET_VIEWS).filter(function (v) { return v.userId === userId; });
@@ -220,12 +242,14 @@ function handleGetState(userId) {
   var tasks = visibleTasks.map(function (t) {
     var viewedAt = viewedMap[t.id];
     var isOwn = t.creatorId === userId;
+    var isWatcher = safeJson(t.watchers, []).indexOf(userId) !== -1;
     return Object.assign({}, t, {
       tags: safeJson(t.tags, []),
       dependencies: safeJson(t.dependencies, []),
+      watchers: safeJson(t.watchers, []),
       completed: t.completed === true || t.completed === 'TRUE' || t.completed === 'true',
       canEdit: isOwn,
-      canComplete: isOwn || t.assigneeId === userId,
+      canComplete: isOwn || t.assigneeId === userId || isWatcher,
       isUnread: !viewedAt,
       isChanged: !!viewedAt && Number(t.updatedAt) > viewedAt
     });
@@ -271,15 +295,18 @@ function handleSaveProject(userId, project) {
   if (existing) {
     if (existing.creatorId !== userId) return { ok: false, error: 'Редактировать может только автор проекта' };
     var merged = Object.assign({}, existing, project, { creatorId: existing.creatorId, updatedAt: Date.now() });
+    merged.members = JSON.stringify(project.members !== undefined ? project.members : safeJson(existing.members, []));
     upsertRow(SHEET_PROJECTS, merged);
-    return { ok: true, project: merged };
+    return { ok: true, project: Object.assign({}, merged, { members: safeJson(merged.members, []) }) };
   }
   project.id = project.id || Utilities.getUuid();
   project.creatorId = userId;
   project.updatedAt = Date.now();
   project.createdAt = project.updatedAt;
+  var membersList = project.members || [];
+  project.members = JSON.stringify(membersList);
   upsertRow(SHEET_PROJECTS, project);
-  return { ok: true, project: project };
+  return { ok: true, project: Object.assign({}, project, { members: membersList }) };
 }
 
 function handleSaveSection(userId, section) {
@@ -306,6 +333,7 @@ function handleSaveTask(userId, task) {
     task.createdAt = task.updatedAt;
     task.tags = JSON.stringify(task.tags || []);
     task.dependencies = JSON.stringify(task.dependencies || []);
+    task.watchers = JSON.stringify(task.watchers || []);
     upsertRow(SHEET_TASKS, task);
     return { ok: true, taskId: task.id };
   }
@@ -314,11 +342,16 @@ function handleSaveTask(userId, task) {
     var merged = Object.assign({}, existing, task, { creatorId: existing.creatorId, id: existing.id, updatedAt: Date.now() });
     merged.tags = JSON.stringify(task.tags !== undefined ? task.tags : safeJson(existing.tags, []));
     merged.dependencies = JSON.stringify(task.dependencies !== undefined ? task.dependencies : safeJson(existing.dependencies, []));
+    merged.watchers = JSON.stringify(task.watchers !== undefined ? task.watchers : safeJson(existing.watchers, []));
     upsertRow(SHEET_TASKS, merged);
     return { ok: true, taskId: merged.id };
   }
 
-  if (existing.assigneeId === userId) {
+  // Не создатель — но назначен исполнителем ИЛИ в списке наблюдателей:
+  // можно отметить выполненной и написать заметку, остальное нельзя.
+  var isAssignee = existing.assigneeId === userId;
+  var isWatcher = safeJson(existing.watchers, []).indexOf(userId) !== -1;
+  if (isAssignee || isWatcher) {
     var patch = { updatedAt: Date.now() };
     ASSIGNEE_EDITABLE_TASK_FIELDS.forEach(function (field) {
       if (task[field] !== undefined) patch[field] = task[field];

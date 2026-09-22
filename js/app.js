@@ -170,6 +170,7 @@
     if (!Array.isArray(s.users)) s.users = [];
     s.projects.forEach((p) => {
       if (p.parentId === undefined) p.parentId = null;
+      if (!Array.isArray(p.members)) p.members = [];
       p.tasks.forEach((t) => {
         if (t.parentTaskId === undefined) t.parentTaskId = null;
         if (t.assigneeId === undefined) {
@@ -190,6 +191,7 @@
         if (t.datesAuto === undefined) t.datesAuto = true;
         if (!Array.isArray(t.dependsOn)) t.dependsOn = [];
         if (!Array.isArray(t.tags)) t.tags = [];
+        if (!Array.isArray(t.watchers)) t.watchers = [];
         if (t.archived === undefined) t.archived = false;
       });
     });
@@ -617,6 +619,9 @@
   const archiveNavBtn = document.getElementById("archiveNavBtn");
   const archiveCountEl = document.getElementById("archiveCount");
   const archiveCompletedBtn = document.getElementById("archiveCompletedBtn");
+  const membersToggleBtn = document.getElementById("membersToggleBtn");
+  const membersPanel = document.getElementById("membersPanel");
+  const membersList = document.getElementById("membersList");
 
   const modalOverlay = document.getElementById("modalOverlay");
   const modalMessage = document.getElementById("modalMessage");
@@ -669,6 +674,7 @@
   const detailTitle = document.getElementById("detailTitle");
   const detailSection = document.getElementById("detailSection");
   const detailAssignee = document.getElementById("detailAssignee");
+  const detailWatchers = document.getElementById("detailWatchers");
   const detailStart = document.getElementById("detailStart");
   const detailDue = document.getElementById("detailDue");
   const datesAutoRow = document.getElementById("datesAutoRow");
@@ -1657,7 +1663,34 @@
     Array.from(viewSwitch.children).forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.view === state.view);
     });
+    // Управлять участниками проекта (кто видит его целиком) может только
+    // автор — остальным кнопка не нужна, у них и так нет прав её менять.
+    membersToggleBtn.hidden = proj._canEdit === false;
+    renderMembersPanel(proj);
     renderFilterControls();
+  }
+
+  // Список пользователей с чекбоксами: кто из них состоит в участниках
+  // текущего проекта (js/sync.js — project.members) и поэтому видит ВСЕ
+  // его задачи, а не только свои/назначенные.
+  function renderMembersPanel(proj) {
+    if (!state.users.length) {
+      membersList.innerHTML = `<div class="members-list-empty">Список людей пуст — добавьте их на экране «Люди» или дождитесь, пока кто-то войдёт в приложение.</div>`;
+      return;
+    }
+    const members = new Set(proj.members || []);
+    membersList.innerHTML = state.users.map((u) => `
+      <label><input type="checkbox" data-member-id="${u.id}" ${members.has(u.id) ? "checked" : ""}> ${escapeHtml(u.name)}</label>
+    `).join("");
+    membersList.querySelectorAll("[data-member-id]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const current = getActiveProject();
+        const set = new Set(current.members || []);
+        if (cb.checked) set.add(cb.dataset.memberId); else set.delete(cb.dataset.memberId);
+        current.members = [...set];
+        commit(true);
+      });
+    });
   }
 
   // Обновляет содержимое панели фильтров под текущий проект: список
@@ -2938,6 +2971,7 @@
       title,
       notes: "",
       assigneeId: null,
+      watchers: [],
       start: "",
       due: "",
       datesAuto: true,
@@ -3049,6 +3083,30 @@
 
   // ---------- панель деталей задачи (справа) ----------
 
+  // Наблюдатели (js/sync.js) — в отличие от единственного исполнителя,
+  // это список из нескольких людей; каждый из них может отметить задачу
+  // выполненной и писать заметку, как и исполнитель, но не создатель.
+  function renderWatchers(task) {
+    if (!state.users.length) {
+      detailWatchers.innerHTML = `<div class="watchers-list-empty">Список людей пуст</div>`;
+      return;
+    }
+    const watchers = new Set(task.watchers || []);
+    detailWatchers.innerHTML = state.users.map((u) => `
+      <label><input type="checkbox" data-watcher-id="${u.id}" ${watchers.has(u.id) ? "checked" : ""}> ${escapeHtml(u.name)}</label>
+    `).join("");
+    detailWatchers.querySelectorAll("[data-watcher-id]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const t = currentTask();
+        if (!t) return;
+        const set = new Set(t.watchers || []);
+        if (cb.checked) set.add(cb.dataset.watcherId); else set.delete(cb.dataset.watcherId);
+        t.watchers = [...set];
+        commit(true);
+      });
+    });
+  }
+
   // Открывает панель справа и заполняет все её поля данными выбранной
   // задачи: название, раздел, исполнитель, даты (с учётом авторасчёта по
   // подзадачам), приоритет, оценка часов, теги, заметки, хлебная крошка
@@ -3082,6 +3140,8 @@
 
     detailAssignee.innerHTML = `<option value="">Без исполнителя</option>` + state.users.map((u) => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
     detailAssignee.value = task.assigneeId || "";
+
+    renderWatchers(task);
 
     const hasChildren = getSubtasks(proj, task.id).length > 0;
     if (hasChildren) {
@@ -3144,6 +3204,12 @@
     datesAutoToggleBtn.disabled = readOnly;
     subtaskAddInput.disabled = readOnly;
     depsAddSelect.disabled = readOnly;
+    detailWatchers.querySelectorAll("input").forEach((cb) => { cb.disabled = readOnly; });
+    // Участник проекта, который видит эту задачу только потому, что видит
+    // весь проект (не создатель, не исполнитель, не наблюдатель) — не
+    // может даже отмечать её выполненной, в отличие от исполнителя/
+    // наблюдателя (см. ASSIGNEE_EDITABLE_TASK_FIELDS в gas/Code.gs).
+    detailComplete.disabled = task._canComplete === false;
 
     openModalFocus(detailPanel, detailTitle);
   }
@@ -4201,6 +4267,17 @@
   document.addEventListener("click", () => { filterPanel.hidden = true; });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !filterPanel.hidden) filterPanel.hidden = true;
+  });
+
+  // ---------- панель участников проекта (видят весь проект целиком) ----------
+  membersToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    membersPanel.hidden = !membersPanel.hidden;
+  });
+  membersPanel.addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", () => { membersPanel.hidden = true; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !membersPanel.hidden) membersPanel.hidden = true;
   });
 
   function applyFilterChange() {
