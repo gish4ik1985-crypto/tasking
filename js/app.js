@@ -209,6 +209,18 @@
         if (t.parentTaskId && !idsInProject.has(t.parentTaskId)) t.parentTaskId = null;
       });
     });
+    // То же самое для подпроектов: если parentId ссылается на проект,
+    // которого в локальном наборе нет (сервер прислал подпроект — он
+    // виден пользователю через задачу внутри — но без родителя, если
+    // родительский проект самому пользователю не виден), сайдбар его
+    // никогда не отрисует — renderSidebar обходит дерево только от
+    // корневых проектов вниз, и такой "подвисший" подпроект (со всеми
+    // своими задачами) просто выпадает из интерфейса целиком, хотя
+    // дашборд/счётчики его по-прежнему учитывают. Считаем его корневым.
+    const projectIds = new Set(s.projects.map((p) => p.id));
+    s.projects.forEach((p) => {
+      if (p.parentId && !projectIds.has(p.parentId)) p.parentId = null;
+    });
     if (!s.screen) s.screen = "project";
     if (!s.view) s.view = "board";
     if (!s.ganttNameColWidth) s.ganttNameColWidth = 260;
