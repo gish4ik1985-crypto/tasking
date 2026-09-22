@@ -86,7 +86,7 @@
             { id: uid(), sectionId: sTodo, parentTaskId: taskWithSub, title: "Пример подзадачи", notes: "", assigneeId: null, start: addDays(today, 0), due: addDays(today, 2), datesAuto: true, priority: "low", tags: [], estimateHours: null, completed: false, order: 0 },
             { id: uid(), sectionId: sTodo, parentTaskId: taskWithSub, title: "Вторая подзадача", notes: "", assigneeId: userBorisId, start: addDays(today, 3), due: addDays(today, 5), datesAuto: true, priority: "medium", tags: [], estimateHours: 3, completed: false, order: 1 },
             { id: uid(), sectionId: sTodo, parentTaskId: null, title: "Перетащите эту карточку на другую", notes: "", assigneeId: userBorisId, start: addDays(today, 1), due: addDays(today, 2), datesAuto: true, priority: "low", tags: ["демо"], estimateHours: 4, completed: false, order: 1 },
-            { id: uid(), sectionId: sProgress, parentTaskId: null, title: "Откройте «Дашборд» слева", notes: "Сводка по всем проектам и подпроектам, включая загрузку людей.", assigneeId: userAnyaId, start: addDays(today, -2), due: addDays(today, 1), datesAuto: true, priority: "medium", tags: [], estimateHours: 2, completed: false, order: 0 },
+            { id: uid(), sectionId: sProgress, parentTaskId: null, title: "Откройте «Рабочий стол» слева", notes: "Сводка по всем проектам и подпроектам, включая загрузку людей.", assigneeId: userAnyaId, start: addDays(today, -2), due: addDays(today, 1), datesAuto: true, priority: "medium", tags: [], estimateHours: 2, completed: false, order: 0 },
             { id: uid(), sectionId: sDone, parentTaskId: null, title: "Создать подпроект кнопкой «+» у проекта", notes: "", assigneeId: null, start: "", due: "", datesAuto: true, priority: "low", tags: [], estimateHours: null, completed: true, order: 0 }
           ]
         },
@@ -1415,7 +1415,7 @@
     const items = [];
 
     if (!query) {
-      items.push({ type: "screen", icon: "◧", title: "Дашборд", action: () => { state.screen = "dashboard"; commit(); } });
+      items.push({ type: "screen", icon: "◧", title: "Рабочий стол", action: () => { state.screen = "dashboard"; commit(); } });
       items.push({ type: "screen", icon: "☺", title: "Люди", action: () => { state.screen = "people"; commit(); } });
       items.push({ type: "screen", icon: "🗑", title: "Корзина", action: () => { state.screen = "trash"; commit(); } });
       items.push({ type: "screen", icon: "🗄", title: "Архив", action: () => { state.screen = "archive"; commit(); } });
@@ -2799,7 +2799,10 @@
     startD.setDate(startD.getDate() - 2);
     const endD = strToDate(rangeMax);
     endD.setDate(endD.getDate() + 4);
-    const totalDays = Math.max(10, Math.round((endD - startD) / 86400000) + 1);
+    // Минимум ~3 месяца в ширину, даже если у видимых задач узкий разброс
+    // дат (или дат вовсе нет) — иначе Гант показывает одну неделю и
+    // сразу упирается в край, вместо обзора на перспективу.
+    const totalDays = Math.max(90, Math.round((endD - startD) / 86400000) + 1);
 
     // Смещение даты от начала шкалы в днях (пригодится для позиции полосы в пикселях).
     function dayOffset(dateStr) {
@@ -3693,28 +3696,18 @@
     commit();
   }
 
-  // ---------- люди (справочник исполнителей) ----------
+  // ---------- люди (отчёт по реальным аккаунтам) ----------
 
-  // Добавляет нового человека в справочник (40 часов в неделю по умолчанию).
-  function createUser(name) {
-    state.users.push({ id: uid(), name, color: PROJECT_COLORS[state.users.length % PROJECT_COLORS.length], weeklyHours: 40 });
-    save();
-  }
-
-  // Удаляет человека из справочника. Если на него назначены задачи —
-  // спрашивает подтверждение и снимает с этих задач исполнителя (сами
-  // задачи не удаляются).
-  async function deleteUser(userId) {
-    const inUse = state.projects.some((p) => p.tasks.some((t) => t.assigneeId === userId));
-    if (inUse && !(await showConfirm("Этот человек назначен на задачи. Удалить из справочника? Задачи останутся без исполнителя."))) return;
-    state.projects.forEach((p) => p.tasks.forEach((t) => { if (t.assigneeId === userId) t.assigneeId = null; }));
-    state.users = state.users.filter((u) => u.id !== userId);
-    commit();
-  }
-
-  // Перерисовывает экран "Люди": таблица со всеми людьми (имя, часов в
-  // неделю, число открытых задач, полоска загрузки в часах) и строка
-  // добавления нового человека.
+  // Перерисовывает экран "Люди": просто отчёт по всем реальным аккаунтам
+  // (имя, часов в неделю, число открытых задач, полоска загрузки в часах).
+  // Раньше здесь можно было добавлять/переименовывать/удалять людей
+  // локально — с переходом на мульти-пользовательский синк (люди теперь
+  // реальные аккаунты, заводятся входом в систему, правятся в своём
+  // профиле или через админ-панель) это стало и бессмысленным (правки тут
+  // не сохранялись бы дальше первой синхронизации), и опасным: кнопка
+  // "удалить" не просто прятала человека, а снимала его со всех
+  // назначенных задач и ОТПРАВЛЯЛА это на сервер, хотя выглядела как
+  // локальное косметическое действие.
   function renderPeople() {
     const rows = state.users.map((u) => {
       const stats = getUserStats(u.id);
@@ -3723,58 +3716,27 @@
       const conflict = hasScheduleConflict(u.id);
       return `
         <div class="people-row" data-user-id="${u.id}">
-          <input class="people-name-input" data-field="name" data-user-id="${u.id}" value="${escapeHtml(u.name)}" aria-label="Имя человека">
-          <input type="number" class="people-hours-input" data-field="weeklyHours" data-user-id="${u.id}" min="0" step="1" value="${u.weeklyHours}" aria-label="Часов в неделю">
+          <span class="people-name">${escapeHtml(u.name)}</span>
+          <span class="people-hours">${u.weeklyHours} ч/нед</span>
           <span class="people-stat">${stats.openTasks}${conflict ? ' <span class="people-conflict" title="Есть пересекающиеся по датам задачи">⚠</span>' : ""}</span>
           <span class="people-util-wrap">
             <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:${Math.min(100, util)}%;${over ? "background:var(--danger)" : ""}"></div></div>
             <span class="people-util-label">${stats.totalHours}${u.weeklyHours ? "/" + u.weeklyHours : ""} ч</span>
           </span>
-          <button class="people-del" data-del-user="${u.id}" title="Удалить" aria-label="Удалить «${escapeHtml(u.name)}»">×</button>
         </div>
       `;
-    }).join("");
+    }).join("") || `<div class="dash-empty">Пока нет ни одного вошедшего пользователя</div>`;
 
     peopleEl.innerHTML = `
-      <div class="people-header">Справочник пользователей</div>
-      <div class="people-sub">Добавьте исполнителей — они появятся в выпадающем списке «Исполнитель» у задач и в сводке загрузки на дашборде.</div>
+      <div class="people-header">Люди</div>
+      <div class="people-sub">Все, кто хотя бы раз входил в систему. Имя, цвет и часы в неделю человек меняет у себя в профиле.</div>
       <div class="people-table">
         <div class="people-row people-row-head">
-          <span>Имя</span><span>Часов/нед</span><span>Задач</span><span>Загрузка</span><span></span>
+          <span>Имя</span><span>Часов/нед</span><span>Задач</span><span>Загрузка</span>
         </div>
         ${rows}
       </div>
-      <div class="people-add-row">
-        <input type="text" id="peopleAddInput" placeholder="Имя нового человека...">
-      </div>
     `;
-
-    peopleEl.querySelectorAll('[data-field="name"]').forEach((inp) => {
-      inp.addEventListener("change", () => {
-        const u = state.users.find((x) => x.id === inp.dataset.userId);
-        if (u) { u.name = inp.value.trim() || u.name; commit(true); }
-      });
-    });
-    peopleEl.querySelectorAll('[data-field="weeklyHours"]').forEach((inp) => {
-      inp.addEventListener("change", () => {
-        const u = state.users.find((x) => x.id === inp.dataset.userId);
-        if (u) { u.weeklyHours = Math.max(0, Number(inp.value) || 0); commit(true); }
-      });
-    });
-    peopleEl.querySelectorAll("[data-del-user]").forEach((btn) => {
-      btn.addEventListener("click", () => deleteUser(btn.dataset.delUser));
-    });
-
-    const addInput = document.getElementById("peopleAddInput");
-    addInput.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      const name = addInput.value.trim();
-      if (!name) return;
-      createUser(name);
-      renderAll(true);
-      const fresh = document.getElementById("peopleAddInput");
-      if (fresh) fresh.focus();
-    });
   }
 
   // ---------- корзина (удалённые задачи, которые можно восстановить) ----------
@@ -3993,16 +3955,16 @@
       : `<div class="dash-empty">Нет активных задач</div>`;
 
     dashboardEl.innerHTML = `
-      <div class="dashboard-header">Дашборд</div>
+      <div class="dashboard-header">Рабочий стол</div>
       <div class="kpi-row">
-        <div class="kpi-card"><div class="kpi-value">${totalTasks}</div><div class="kpi-label">Всего задач</div></div>
-        <div class="kpi-card"><div class="kpi-value">${pct}%</div><div class="kpi-label">Выполнено (${completedTasks}/${totalTasks})</div></div>
-        <div class="kpi-card ${overdueTasks.length ? "warn" : ""}"><div class="kpi-value">${overdueTasks.length}</div><div class="kpi-label">Просрочено</div></div>
-        <div class="kpi-card"><div class="kpi-value">${topLevelProjectsCount}</div><div class="kpi-label">Глобальных проектов</div></div>
+        <button type="button" class="kpi-card" data-scroll-to="dashProjectsSection"><div class="kpi-value">${totalTasks}</div><div class="kpi-label">Всего задач</div></button>
+        <button type="button" class="kpi-card" data-scroll-to="dashProjectsSection"><div class="kpi-value">${pct}%</div><div class="kpi-label">Выполнено (${completedTasks}/${totalTasks})</div></button>
+        <button type="button" class="kpi-card ${overdueTasks.length ? "warn" : ""}" data-scroll-to="dashOverdueSection"><div class="kpi-value">${overdueTasks.length}</div><div class="kpi-label">Просрочено</div></button>
+        <button type="button" class="kpi-card" data-scroll-to="dashProjectsSection"><div class="kpi-value">${topLevelProjectsCount}</div><div class="kpi-label">Глобальных проектов</div></button>
       </div>
       <div class="dash-grid">
         <div>
-          <div class="dash-section">
+          <div class="dash-section" id="dashProjectsSection">
             <h2>Проекты и подпроекты</h2>
             ${projectTreeHtml}
           </div>
@@ -4012,7 +3974,7 @@
           </div>
         </div>
         <div>
-          <div class="dash-section">
+          <div class="dash-section" id="dashOverdueSection">
             <h2>Просроченные задачи</h2>
             ${overdueHtml}
           </div>
@@ -4023,6 +3985,19 @@
         </div>
       </div>
     `;
+
+    // Баннеры-цифры сверху — переход к соответствующему разделу ниже на
+    // этом же экране (с короткой подсветкой, чтобы было видно, куда
+    // прыгнули), а не просто нейтральные цифры без действия.
+    dashboardEl.querySelectorAll("[data-scroll-to]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = document.getElementById(btn.dataset.scrollTo);
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.classList.add("dash-section-flash");
+        setTimeout(() => target.classList.remove("dash-section-flash"), 900);
+      });
+    });
 
     dashboardEl.querySelectorAll(".proj-tree-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -4500,7 +4475,10 @@
     sidebarCollapseBtn.title = collapsed ? "Развернуть панель" : "Свернуть панель";
     sidebarCollapseBtn.setAttribute("aria-label", sidebarCollapseBtn.title);
   }
-  const savedSidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+  // localStorage.getItem/setItem может бросить (например, под file://
+  // origin в некоторых движках) — так же осторожно, как и loadState() выше.
+  let savedSidebarCollapsed = null;
+  try { savedSidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY); } catch (e) { /* см. выше */ }
   // Нет сохранённого выбора — сворачиваем сами на узких экранах (телефон
   // в портретной ориентации) и на низких широких (телефон "лёжа" —
   // альбомная ориентация, где иначе кнопки шапки съедают всю ширину
@@ -4510,7 +4488,7 @@
   sidebarCollapseBtn.addEventListener("click", () => {
     const collapsed = !sidebarEl.classList.contains("collapsed");
     applySidebarCollapsed(collapsed);
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0"); } catch (e) { /* см. выше */ }
   });
 
   // Точка входа: один раз навешиваем обработчики полей панели деталей и

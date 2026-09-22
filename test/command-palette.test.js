@@ -70,7 +70,7 @@ describe("командная палитра (Ctrl+K)", () => {
     const doc = dom.window.document;
     openPalette(dom.window);
     const titles = [...doc.querySelectorAll(".palette-item-title")].map((e) => e.textContent);
-    expect(titles).toEqual(expect.arrayContaining(["Дашборд", "Люди", "Корзина", "Проект А", "Проект Б"]));
+    expect(titles).toEqual(expect.arrayContaining(["Рабочий стол", "Люди", "Корзина", "Проект А", "Проект Б"]));
     assertNoJsErrors(jsErrors);
   });
 });

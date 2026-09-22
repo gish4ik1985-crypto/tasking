@@ -4,6 +4,20 @@
 // существует, тесты гоняют ровно тот же app.js/analytics.js, что видит
 // пользователь.
 //
+// Один нюанс: в реальном приложении app.js/analytics.js подгружает
+// динамически auth.js, и только ПОСЛЕ успешного входа (см. loadAppScripts()
+// в auth.js) — так неавторизованный посетитель не получает код приложения
+// вообще. Сам вход стучится в живой Google Apps Script по сети, чего в
+// тестовом jsdom-окружении нет и мокать его тут не входит в задачу этих
+// тестов (они про логику задач/проектов в app.js, а не про сам вход).
+// Поэтому здесь <script src="js/auth.js">/sync.js/admin.js заменяются на
+// прямую статическую загрузку analytics.js + app.js — в точности то же,
+// что подгрузил бы auth.js после входа, просто без сетевого шага перед
+// этим. Сам app.js от этого не отличается ни на строчку: все обращения к
+// window.TaskingAuth/TaskingSync в нём и так на месте предусмотрены
+// опциональными (`if (window.TaskingSync) ...`) именно для случая, когда
+// синхронизация недоступна/отключена.
+//
 // Два режима:
 //  - loadApp() (по умолчанию) — фиктивный origin http://localhost/, но
 //    файлы всё равно читаются с диска (см. LocalResourceLoader ниже, а не
@@ -46,7 +60,10 @@ const localFileInterceptor = requestInterceptor((request) => {
 // снимается), так что им можно пользоваться и после кликов в тесте.
 export async function loadApp({ seedState, rawLocalStorage, protocol = "http" } = {}) {
   const indexPath = path.join(ROOT, "index.html");
-  const html = readFileSync(indexPath, "utf-8");
+  const html = readFileSync(indexPath, "utf-8").replace(
+    /<script src="js\/auth\.js"><\/script>\r?\n<script src="js\/sync\.js"><\/script>\r?\n<script src="js\/admin\.js"><\/script>/,
+    '<script src="js/analytics.js"></script>\n<script src="js/app.js"></script>'
+  );
 
   const jsErrors = [];
   const virtualConsole = new VirtualConsole();

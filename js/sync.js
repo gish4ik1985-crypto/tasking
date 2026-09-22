@@ -79,12 +79,14 @@
       tasks: tasksByProject[p.id] || []
     }));
 
+    // Список людей — целиком с сервера (реальные аккаунты из листа Users),
+    // без подмешивания того, что было в prevLocal. Раньше сюда добавлялось
+    // всё, чего нет в usersList, — из-за этого старые локальные "люди"
+    // (из миграции текстового поля assignee при импорте старого JSON, или
+    // добавленные вручную на экране "Люди" до перехода на мульти-
+    // пользовательский режим) копились вечно и никогда не пропадали, даже
+    // если реального аккаунта под ними никогда не было.
     const users = usersList.slice();
-    if (prevLocal && Array.isArray(prevLocal.users)) {
-      prevLocal.users.forEach((u) => {
-        if (!users.some((u2) => u2.id === u.id)) users.push(u);
-      });
-    }
 
     const activeStillExists = prevLocal && projects.some((p) => p.id === prevLocal.activeProjectId);
 
