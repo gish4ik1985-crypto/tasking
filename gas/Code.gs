@@ -287,6 +287,14 @@ function handleGetState(userId) {
   // Если видна родительская задача — все её подзадачи (и подзадачи
   // подзадач) должны быть видны тоже, иначе назначенный/наблюдающий
   // пользователь видит саму задачу пустой, без разбивки на подзадачи.
+  // И наоборот: если видна ТОЛЬКО подзадача (например, назначили именно
+  // её, а не родителя) — вся цепочка родителей вверх тоже должна попасть
+  // в ответ, иначе в древовидных видах (Структура/Гант) эта подзадача
+  // ни к чему не подвешена и просто не рисуется, хотя формально приходит
+  // с сервера (родители при этом остаются нередактируемыми — canEdit
+  // считается ниже как обычно, по creatorId).
+  var taskById = {};
+  allTasks.forEach(function (t) { taskById[t.id] = t; });
   var visibleTaskIds = {};
   visibleTasks.forEach(function (t) { visibleTaskIds[t.id] = true; });
   var addedMore = true;
@@ -295,6 +303,13 @@ function handleGetState(userId) {
     allTasks.forEach(function (t) {
       if (!visibleTaskIds[t.id] && t.parentTaskId && visibleTaskIds[t.parentTaskId]) {
         visibleTaskIds[t.id] = true;
+        addedMore = true;
+      }
+    });
+    Object.keys(visibleTaskIds).forEach(function (id) {
+      var t = taskById[id];
+      if (t && t.parentTaskId && taskById[t.parentTaskId] && !visibleTaskIds[t.parentTaskId]) {
+        visibleTaskIds[t.parentTaskId] = true;
         addedMore = true;
       }
     });
@@ -457,7 +472,25 @@ function handleDeleteTask(userId, taskId) {
   var existing = findRow(SHEET_TASKS, taskId);
   if (!existing) return { ok: true }; // уже удалена — считаем успехом
   if (existing.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Удалить может только автор задачи' };
-  deleteRow(SHEET_TASKS, taskId);
+  // Каскад по подзадачам на любую глубину — клиент обычно и сам шлёт
+  // отдельный deleteTask на каждую из них, но если один из вызовов не
+  // дойдёт (обрыв сети, гонка), подзадачи иначе остаются висящими
+  // строками со ссылкой на несуществующего родителя (parentTaskId),
+  // которые ни один вид на клиенте не умеет отрисовать.
+  var allTasks = readRows(SHEET_TASKS);
+  var idsToDelete = {};
+  idsToDelete[taskId] = true;
+  var addedMore = true;
+  while (addedMore) {
+    addedMore = false;
+    allTasks.forEach(function (t) {
+      if (!idsToDelete[t.id] && t.parentTaskId && idsToDelete[t.parentTaskId]) {
+        idsToDelete[t.id] = true;
+        addedMore = true;
+      }
+    });
+  }
+  deleteRowsWhere(SHEET_TASKS, function (r) { return !!idsToDelete[r.id]; });
   return { ok: true };
 }
 

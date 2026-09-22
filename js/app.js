@@ -198,6 +198,16 @@
         if (!Array.isArray(t.watchers)) t.watchers = [];
         if (t.archived === undefined) t.archived = false;
       });
+      // "Подвисшая" подзадача — parentTaskId ссылается на задачу, которой
+      // в этом проекте нет (сервер мог прислать её без родителя, если тот
+      // самому пользователю не виден, либо родителя вообще удалили).
+      // Ни один из видов не умеет рисовать такое дерево — задача просто
+      // пропадает из интерфейса, хотя формально она есть. Считаем её
+      // корневой, а не теряем.
+      const idsInProject = new Set(p.tasks.map((t) => t.id));
+      p.tasks.forEach((t) => {
+        if (t.parentTaskId && !idsInProject.has(t.parentTaskId)) t.parentTaskId = null;
+      });
     });
     if (!s.screen) s.screen = "project";
     if (!s.view) s.view = "board";
