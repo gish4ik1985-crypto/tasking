@@ -1086,9 +1086,16 @@
 
   // id самого проекта + id всех его подпроектов на любую глубину — для
   // удаления проекта целиком вместе со всеми вложенными подпроектами.
-  function getProjectDescendantIds(projectId) {
+  // seen защищает от зацикливания, если где-то в данных подпроект случайно
+  // стал предком самого себя (например, при гонке двух одновременных
+  // перетаскиваний) — без неё рекурсия ушла бы в бесконечность и уронила
+  // бы рендер (переполнение стека) при разворачивании дерева целиком.
+  function getProjectDescendantIds(projectId, seen) {
+    seen = seen || new Set();
+    if (seen.has(projectId)) return [];
+    seen.add(projectId);
     const ids = [projectId];
-    state.projects.filter((p) => p.parentId === projectId).forEach((c) => ids.push(...getProjectDescendantIds(c.id)));
+    state.projects.filter((p) => p.parentId === projectId).forEach((c) => ids.push(...getProjectDescendantIds(c.id, seen)));
     return ids;
   }
 
@@ -2433,7 +2440,7 @@
     `;
     const rowsEl = block.querySelector(".tree-rows");
 
-    renderStructureBranch(rowsEl, proj, 0, [], q);
+    renderStructureBranch(rowsEl, proj, 0, [], q, new Set([proj.id]));
 
     treeEl.appendChild(block);
     bindTreeEvents();
@@ -2443,7 +2450,9 @@
   // задачи верхнего уровня + прямые подпроекты) внутри общего дерева
   // "Структуры" — так подпроекты становятся не просто ссылкой в сайдбаре,
   // а полноценной веткой того же дерева, со своими задачами внутри.
-  function renderStructureBranch(rowsEl, proj, depth, continuesStack, q) {
+  // seen — защита от зацикливания в данных (см. getProjectDescendantIds):
+  // без неё случайно закольцованные parentId уронили бы рендер целиком.
+  function renderStructureBranch(rowsEl, proj, depth, continuesStack, q, seen) {
     const sectionsById = {};
     proj.sections.forEach((s) => { sectionsById[s.id] = s.name; });
     const statusLookup = (task) => sectionsById[task.sectionId] || "";
@@ -2456,7 +2465,7 @@
       .filter((t) => matchesSearch(proj, t, q))
       .filter((t) => !t.archived && (state.showCompleted || !t.completed))
       .sort((a, b) => a.order - b.order);
-    const subprojects = state.projects.filter((p) => p.parentId === proj.id);
+    const subprojects = state.projects.filter((p) => p.parentId === proj.id && !seen.has(p.id));
     const combinedLen = topTasks.length + subprojects.length;
     let i = 0;
 
@@ -2469,7 +2478,7 @@
       const childContinues = i < combinedLen - 1;
       const childStack = [...continuesStack, childContinues];
       appendProjectHeaderRow(rowsEl, sp, depth, childStack);
-      if (!collapsedProjects.has(sp.id)) renderStructureBranch(rowsEl, sp, depth + 1, childStack, q);
+      if (!collapsedProjects.has(sp.id)) renderStructureBranch(rowsEl, sp, depth + 1, childStack, q, new Set(seen).add(sp.id));
       i++;
     });
   }
@@ -2715,7 +2724,8 @@
       });
     }
 
-    function walkProject(proj, depth, continuesStack) {
+    // seen — защита от зацикливания в данных (см. getProjectDescendantIds).
+    function walkProject(proj, depth, continuesStack, seen) {
       const topTasks = [];
       proj.sections.forEach((section) => {
         proj.tasks
@@ -2725,7 +2735,7 @@
           .sort((a, b) => a.order - b.order)
           .forEach((t) => topTasks.push(t));
       });
-      const subprojects = state.projects.filter((p) => p.parentId === proj.id);
+      const subprojects = state.projects.filter((p) => p.parentId === proj.id && !seen.has(p.id));
       const combinedLen = topTasks.length + subprojects.length;
       let i = 0;
       topTasks.forEach((t) => {
@@ -2737,11 +2747,11 @@
         const childContinues = i < combinedLen - 1;
         const childStack = [...continuesStack, childContinues];
         rows.push({ type: "project", project: sp, depth, continuesStack: childStack });
-        if (!collapsedProjects.has(sp.id)) walkProject(sp, depth + 1, childStack);
+        if (!collapsedProjects.has(sp.id)) walkProject(sp, depth + 1, childStack, new Set(seen).add(sp.id));
         i++;
       });
     }
-    walkProject(rootProj, 0, []);
+    walkProject(rootProj, 0, [], new Set([rootProj.id]));
 
     if (!rows.length) {
       ganttEl.innerHTML = `<div class="dash-empty" style="padding:24px;">Нет задач для отображения</div>`;

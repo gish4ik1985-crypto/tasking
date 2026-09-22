@@ -399,6 +399,20 @@ function handleSaveProject(userId, project) {
     if (existing.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Редактировать может только автор проекта' };
     var merged = Object.assign({}, existing, project, { creatorId: existing.creatorId, updatedAt: Date.now() });
     merged.members = JSON.stringify(project.members !== undefined ? project.members : safeJson(existing.members, []));
+    // Не даём проекту стать предком самого себя (например, гонка двух
+    // одновременных перетаскиваний в разных вкладках) — иначе дерево
+    // подпроектов зацикливается и вешает рендер на клиенте.
+    if (merged.parentId) {
+      var allProjectsForCycleCheck = readRows(SHEET_PROJECTS);
+      var cursor = merged.parentId;
+      var guard = 0;
+      while (cursor && guard < 1000) {
+        if (cursor === merged.id) return { ok: false, error: 'Нельзя вложить проект сам в себя' };
+        var parentRow = allProjectsForCycleCheck.find(function (r) { return r.id === cursor; });
+        cursor = parentRow ? parentRow.parentId : null;
+        guard++;
+      }
+    }
     upsertRow(SHEET_PROJECTS, merged);
     return { ok: true, project: Object.assign({}, merged, { members: safeJson(merged.members, []) }) };
   }
