@@ -4234,6 +4234,15 @@
     state.screen = "people";
     commit();
   });
+  // Экран "Люди" — сводка по загрузке ВСЕХ пользователей сразу, это
+  // управленческая информация, нужна только администратору. Обычному
+  // пользователю она не нужна и просто путает лишним пунктом меню.
+  {
+    const session = window.TaskingAuth && window.TaskingAuth.getSession();
+    const isAdmin = !!(session && session.user && session.user.isAdmin);
+    peopleNavBtn.hidden = !isAdmin;
+    if (!isAdmin && state.screen === "people") state.screen = "dashboard";
+  }
 
   trashNavBtn.addEventListener("click", () => {
     state.screen = "trash";
@@ -4336,10 +4345,30 @@
     searchDebounceTimer = setTimeout(() => renderAll(true), 150);
   });
 
+  // Кнопки-триггеры этих панелей (Фильтры/Участники) живут в шапке
+  // проекта, у которой теперь есть overflow-x:auto (см. .topbar-right —
+  // чтобы кнопки не пропадали за краем на узких/альбомных экранах). Из-за
+  // этого браузер по спецификации CSS неявно ставит и overflow-y:auto —
+  // а это обрезает по вертикали любой АБСОЛЮТНО спозиционированный
+  // потомок, в том числе саму выпадающую панель: клик по кнопке работал,
+  // панель реально открывалась, просто была невидимой (обрезанной этим
+  // скроллом), что выглядело как "кнопка вообще ничего не делает".
+  // Лечится тем, что панель позиционируется как position:fixed
+  // (относительно окна, а не шапки) с координатами, посчитанными от
+  // кнопки в момент открытия — fixed не подчиняется overflow предков.
+  function positionFloatingPanel(panel, anchorBtn) {
+    const rect = anchorBtn.getBoundingClientRect();
+    panel.style.position = "fixed";
+    panel.style.top = (rect.bottom + 6) + "px";
+    panel.style.right = Math.max(8, window.innerWidth - rect.right) + "px";
+    panel.style.left = "auto";
+  }
+
   // ---------- панель фильтров: открытие/закрытие и сами поля ----------
   filterToggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     filterPanel.hidden = !filterPanel.hidden;
+    if (!filterPanel.hidden) positionFloatingPanel(filterPanel, filterToggleBtn);
   });
   filterPanel.addEventListener("click", (e) => e.stopPropagation());
   document.addEventListener("click", () => { filterPanel.hidden = true; });
@@ -4351,6 +4380,7 @@
   membersToggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     membersPanel.hidden = !membersPanel.hidden;
+    if (!membersPanel.hidden) positionFloatingPanel(membersPanel, membersToggleBtn);
   });
   membersPanel.addEventListener("click", (e) => e.stopPropagation());
   membersAdd.addEventListener("change", () => {
