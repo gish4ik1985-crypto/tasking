@@ -118,6 +118,7 @@
       </div>
       <div class="auth-error" id="profileError" hidden></div>
       <button type="button" class="auth-submit" id="profileSaveBtn">Сохранить</button>
+      <button type="button" class="profile-admin-btn" id="profileAdminBtn" hidden>⚙ Управление пользователями</button>
       <button type="button" class="profile-logout" id="profileLogoutBtn">Выйти</button>
     </div>
   `;
@@ -140,6 +141,7 @@
   const profileHours = document.getElementById("profileHours");
   const profileError = document.getElementById("profileError");
   const profileSaveBtn = document.getElementById("profileSaveBtn");
+  const profileAdminBtn = document.getElementById("profileAdminBtn");
   const profileLogoutBtn = document.getElementById("profileLogoutBtn");
   const profileViewChecks = Array.from(document.querySelectorAll("#profileViewsList input[type=checkbox]"));
   const ALL_VIEWS = ["board", "list", "tree", "structure", "gantt"];
@@ -196,7 +198,13 @@
     const views = Array.isArray(user.visibleViews) && user.visibleViews.length ? user.visibleViews : ALL_VIEWS;
     profileViewChecks.forEach((cb) => { cb.checked = views.includes(cb.value); });
     applyViewVisibility(views);
+    profileAdminBtn.hidden = !user.isAdmin;
   }
+
+  profileAdminBtn.addEventListener("click", () => {
+    profilePanel.hidden = true;
+    if (window.TaskingAdmin) window.TaskingAdmin.open();
+  });
 
   // Тянет задачи с сервера и только потом открывает приложение — до этого
   // момента неавторизованный (или ещё не проверенный) посетитель не видит

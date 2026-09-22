@@ -31,6 +31,12 @@
  *    видит ВСЕ задачи и разделы этого проекта целиком (а не только свои/
  *    назначенные), но редактировать может только то, что создал сам или
  *    на что назначен/где наблюдатель — как обычно.
+ *  - Администратор (Users.isAdmin = TRUE) видит и может редактировать/
+ *    удалять АБСОЛЮТНО ВСЁ у ВСЕХ пользователей, как будто он автор.
+ *    Плюс ему доступны adminUpdateUser/adminDeleteUser для управления
+ *    самими пользователями. Ставить isAdmin можно только вручную в самой
+ *    таблице (лист Users, столбец isAdmin = TRUE) — через приложение или
+ *    API назначить администратора нельзя, это осознанно.
  */
 
 var SHEET_USERS = 'Users';
@@ -43,7 +49,7 @@ var SHEET_VIEWS = 'Views';
 var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
 
 var SCHEMAS = {};
-SCHEMAS[SHEET_USERS] = ['id', 'login', 'passwordHash', 'name', 'color', 'weeklyHours', 'visibleViews'];
+SCHEMAS[SHEET_USERS] = ['id', 'login', 'passwordHash', 'name', 'color', 'weeklyHours', 'visibleViews', 'isAdmin'];
 SCHEMAS[SHEET_SESSIONS] = ['token', 'userId', 'expiresAt'];
 SCHEMAS[SHEET_PROJECTS] = ['id', 'name', 'color', 'parentId', 'creatorId', 'members', 'archived', 'createdAt', 'updatedAt'];
 SCHEMAS[SHEET_SECTIONS] = ['id', 'projectId', 'name', 'order'];
@@ -115,6 +121,8 @@ function route(action, body) {
     case 'deleteProject': return handleDeleteProject(userId, body.projectId);
     case 'deleteSection': return handleDeleteSection(userId, body.sectionId);
     case 'markViewed': return handleMarkViewed(userId, body.taskId);
+    case 'adminUpdateUser': return handleAdminUpdateUser(userId, body.targetUserId, body.patch);
+    case 'adminDeleteUser': return handleAdminDeleteUser(userId, body.targetUserId);
     default: return { ok: false, error: 'unknown action' };
   }
 }
@@ -174,12 +182,53 @@ function handleUpdateProfile(userId, profile) {
 function publicUser(user) {
   var views = safeJson(user.visibleViews, null);
   if (!Array.isArray(views) || !views.length) views = ALL_VIEWS.slice();
-  return { id: user.id, login: user.login, name: user.name, color: user.color || '#6d5dfc', weeklyHours: user.weeklyHours === '' || user.weeklyHours === undefined ? 40 : Number(user.weeklyHours), visibleViews: views };
+  return {
+    id: user.id, login: user.login, name: user.name, color: user.color || '#6d5dfc',
+    weeklyHours: user.weeklyHours === '' || user.weeklyHours === undefined ? 40 : Number(user.weeklyHours),
+    visibleViews: views, isAdmin: isAdminValue(user.isAdmin)
+  };
+}
+
+function isAdminValue(v) {
+  return v === true || v === 'TRUE' || v === 'true';
+}
+
+function isUserAdmin(userId) {
+  var user = findRow(SHEET_USERS, userId);
+  return !!(user && isAdminValue(user.isAdmin));
 }
 
 function handleListUsers() {
   var users = readRows(SHEET_USERS);
   return { ok: true, users: users.map(publicUser) };
+}
+
+// ---------- Администрирование (только Users.isAdmin = TRUE) ----------
+
+function handleAdminUpdateUser(userId, targetUserId, patch) {
+  if (!isUserAdmin(userId)) return { ok: false, error: 'Только администратор может это делать' };
+  if (!targetUserId) return { ok: false, error: 'нет targetUserId' };
+  var target = findRow(SHEET_USERS, targetUserId);
+  if (!target) return { ok: false, error: 'Пользователь не найден' };
+  var p = {};
+  if (patch && typeof patch.name === 'string' && patch.name.trim()) p.name = patch.name.trim();
+  if (patch && typeof patch.color === 'string' && patch.color) p.color = patch.color;
+  if (patch && typeof patch.newPassword === 'string' && patch.newPassword) p.passwordHash = sha256(patch.newPassword);
+  var merged = Object.assign({}, target, p);
+  upsertRow(SHEET_USERS, merged);
+  return { ok: true, user: publicUser(merged) };
+}
+
+function handleAdminDeleteUser(userId, targetUserId) {
+  if (!isUserAdmin(userId)) return { ok: false, error: 'Только администратор может это делать' };
+  if (!targetUserId) return { ok: false, error: 'нет targetUserId' };
+  if (targetUserId === userId) return { ok: false, error: 'Нельзя удалить самого себя' };
+  // Задачи/проекты удалённого человека НЕ удаляются и НЕ переназначаются —
+  // это осознанно (чтобы админ случайно не снёс чужую работу вместе с
+  // аккаунтом); они просто останутся с его старым creatorId/assigneeId.
+  deleteRow(SHEET_USERS, targetUserId);
+  deleteRowsWhere(SHEET_SESSIONS, function (r) { return r.userId === targetUserId; });
+  return { ok: true };
 }
 
 function requireSession(token) {
@@ -197,6 +246,28 @@ function handleGetState(userId) {
   var allProjects = readRows(SHEET_PROJECTS);
   var allSections = readRows(SHEET_SECTIONS);
   var allTasks = readRows(SHEET_TASKS);
+
+  // Администратор видит и может редактировать абсолютно всё у всех —
+  // короткий путь в обход обычной фильтрации по правам.
+  if (isUserAdmin(userId)) {
+    var adminViews = readRows(SHEET_VIEWS).filter(function (v) { return v.userId === userId; });
+    var adminViewedMap = {};
+    adminViews.forEach(function (v) { adminViewedMap[v.taskId] = Number(v.viewedAt); });
+    return {
+      ok: true,
+      projects: allProjects.map(function (p) { return Object.assign({}, p, { members: safeJson(p.members, []), canEdit: true }); }),
+      sections: allSections.map(function (s) { return Object.assign({}, s, { canEdit: true }); }),
+      tasks: allTasks.map(function (t) {
+        var viewedAt = adminViewedMap[t.id];
+        return Object.assign({}, t, {
+          tags: safeJson(t.tags, []), dependencies: safeJson(t.dependencies, []), watchers: safeJson(t.watchers, []),
+          completed: t.completed === true || t.completed === 'TRUE' || t.completed === 'true',
+          canEdit: true, canComplete: true,
+          isUnread: !viewedAt, isChanged: !!viewedAt && Number(t.updatedAt) > viewedAt
+        });
+      })
+    };
+  }
 
   // Проекты, где userId — автор или в списке участников (project.members):
   // такой пользователь видит ВЕСЬ проект целиком, а не только свои задачи.
@@ -293,7 +364,7 @@ function handleSaveProject(userId, project) {
   // присланный id ничего не говорит о том, знает ли о нём уже сервер.
   var existing = project.id ? findRow(SHEET_PROJECTS, project.id) : null;
   if (existing) {
-    if (existing.creatorId !== userId) return { ok: false, error: 'Редактировать может только автор проекта' };
+    if (existing.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Редактировать может только автор проекта' };
     var merged = Object.assign({}, existing, project, { creatorId: existing.creatorId, updatedAt: Date.now() });
     merged.members = JSON.stringify(project.members !== undefined ? project.members : safeJson(existing.members, []));
     upsertRow(SHEET_PROJECTS, merged);
@@ -313,7 +384,7 @@ function handleSaveSection(userId, section) {
   if (!section || !section.projectId) return { ok: false, error: 'нет section/projectId' };
   var project = findRow(SHEET_PROJECTS, section.projectId);
   if (!project) return { ok: false, error: 'Проект не найден' };
-  if (project.creatorId !== userId) return { ok: false, error: 'Разделы может менять только автор проекта' };
+  if (project.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Разделы может менять только автор проекта' };
   section.id = section.id || Utilities.getUuid();
   upsertRow(SHEET_SECTIONS, section);
   return { ok: true, section: section };
@@ -338,7 +409,7 @@ function handleSaveTask(userId, task) {
     return { ok: true, taskId: task.id };
   }
 
-  if (existing.creatorId === userId) {
+  if (existing.creatorId === userId || isUserAdmin(userId)) {
     var merged = Object.assign({}, existing, task, { creatorId: existing.creatorId, id: existing.id, updatedAt: Date.now() });
     merged.tags = JSON.stringify(task.tags !== undefined ? task.tags : safeJson(existing.tags, []));
     merged.dependencies = JSON.stringify(task.dependencies !== undefined ? task.dependencies : safeJson(existing.dependencies, []));
@@ -368,7 +439,7 @@ function handleDeleteTask(userId, taskId) {
   if (!taskId) return { ok: false, error: 'нет taskId' };
   var existing = findRow(SHEET_TASKS, taskId);
   if (!existing) return { ok: true }; // уже удалена — считаем успехом
-  if (existing.creatorId !== userId) return { ok: false, error: 'Удалить может только автор задачи' };
+  if (existing.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Удалить может только автор задачи' };
   deleteRow(SHEET_TASKS, taskId);
   return { ok: true };
 }
@@ -377,7 +448,7 @@ function handleDeleteProject(userId, projectId) {
   if (!projectId) return { ok: false, error: 'нет projectId' };
   var existing = findRow(SHEET_PROJECTS, projectId);
   if (!existing) return { ok: true }; // уже удалён — считаем успехом
-  if (existing.creatorId !== userId) return { ok: false, error: 'Удалить может только автор проекта' };
+  if (existing.creatorId !== userId && !isUserAdmin(userId)) return { ok: false, error: 'Удалить может только автор проекта' };
   // Каскад: разделы и задачи внутри проекта удаляем вместе с ним, даже
   // если некоторые задачи создал не сам автор проекта (см. модель прав) —
   // проект целиком в его власти.
@@ -392,7 +463,7 @@ function handleDeleteSection(userId, sectionId) {
   var existing = findRow(SHEET_SECTIONS, sectionId);
   if (!existing) return { ok: true };
   var project = findRow(SHEET_PROJECTS, existing.projectId);
-  if (!project || project.creatorId !== userId) return { ok: false, error: 'Разделы может удалять только автор проекта' };
+  if (!project || (project.creatorId !== userId && !isUserAdmin(userId))) return { ok: false, error: 'Разделы может удалять только автор проекта' };
   deleteRow(SHEET_SECTIONS, sectionId);
   return { ok: true };
 }
