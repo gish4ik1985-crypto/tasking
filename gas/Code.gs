@@ -284,6 +284,23 @@ function handleGetState(userId) {
     return !!memberProjectIds[t.projectId];
   });
 
+  // Если видна родительская задача — все её подзадачи (и подзадачи
+  // подзадач) должны быть видны тоже, иначе назначенный/наблюдающий
+  // пользователь видит саму задачу пустой, без разбивки на подзадачи.
+  var visibleTaskIds = {};
+  visibleTasks.forEach(function (t) { visibleTaskIds[t.id] = true; });
+  var addedMore = true;
+  while (addedMore) {
+    addedMore = false;
+    allTasks.forEach(function (t) {
+      if (!visibleTaskIds[t.id] && t.parentTaskId && visibleTaskIds[t.parentTaskId]) {
+        visibleTaskIds[t.id] = true;
+        addedMore = true;
+      }
+    });
+  }
+  visibleTasks = allTasks.filter(function (t) { return visibleTaskIds[t.id]; });
+
   var refProjectIds = uniq(visibleTasks.map(function (t) { return t.projectId; }));
   var refSectionIds = uniq(visibleTasks.map(function (t) { return t.sectionId; }));
 

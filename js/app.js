@@ -3214,7 +3214,10 @@
     detailTags.disabled = readOnly;
     detailDelete.disabled = readOnly;
     datesAutoToggleBtn.disabled = readOnly;
-    subtaskAddInput.disabled = readOnly;
+    // Добавление подзадачи — это создание НОВОЙ задачи (создателем станет
+    // сам добавляющий), а не редактирование текущей, поэтому право на это
+    // не зависит от readOnly — иначе назначенный на задачу человек не мог
+    // бы добавить в неё ни одной подзадачи.
     depsAddSelect.disabled = readOnly;
     detailWatchers.querySelectorAll("input").forEach((cb) => { cb.disabled = readOnly; });
     // Участник проекта, который видит эту задачу только потому, что видит
