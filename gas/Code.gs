@@ -565,6 +565,18 @@ function uniq(arr) {
   });
 }
 
+// Если fallback — массив (как почти везде: tags/dependencies/members/
+// watchers), а результат разбора почему-то не массив (пустая ячейка после
+// добавления нового столбца, старые данные, случайное не-JSON значение) —
+// всё равно возвращаем fallback, а не что попало. Раньше из-за этого падало
+// с "TypeError: ....indexOf is not a function" на старых задачах/проектах,
+// у которых новый столбец (например watchers) ещё пустой.
 function safeJson(str, fallback) {
-  try { return str ? JSON.parse(str) : fallback; } catch (e) { return fallback; }
+  try {
+    var parsed = str ? JSON.parse(str) : fallback;
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
+    return parsed;
+  } catch (e) {
+    return fallback;
+  }
 }
