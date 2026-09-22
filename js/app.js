@@ -3299,7 +3299,11 @@
     detailPriority.disabled = readOnly;
     detailEstimate.disabled = readOnly;
     detailTags.disabled = readOnly;
-    detailDelete.disabled = readOnly;
+    // Не просто disabled — hidden: серая нерабочая кнопка "Удалить задачу"
+    // у тех, кому и так нельзя ей воспользоваться (не автор и не админ),
+    // только сбивала с толку. Видна она должна быть только автору задачи
+    // или администратору (у обоих в этом случае _canEdit === true).
+    detailDelete.hidden = readOnly;
     datesAutoToggleBtn.disabled = readOnly;
     // Добавление подзадачи — это создание НОВОЙ задачи (создателем станет
     // сам добавляющий), а не редактирование текущей, поэтому право на это
@@ -3542,55 +3546,100 @@
     });
   }
 
-  function renderComments(comments) {
+  // "Кто я" + справочник пользователей для отрисовки одного сообщения —
+  // общая часть между полной перерисовкой и точечной вставкой/заменой
+  // одной строки (см. ниже).
+  function commentRenderCtx() {
     const usersById = {};
     state.users.forEach((u) => { usersById[u.id] = u; });
     const session = window.TaskingAuth && window.TaskingAuth.getSession();
-    const myId = session && session.user && session.user.id;
+    return { usersById, myId: session && session.user && session.user.id };
+  }
 
+  // Разметка ОДНОГО сообщения — используется и при полной перерисовке
+  // списка, и при точечной вставке/замене одной строки, чтобы отправка
+  // сообщения не перестраивала весь чат целиком (это и выглядело как
+  // "обновляется весь чат", и было заметно медленнее на длинной истории).
+  function commentRowHtml(c, ctx) {
+    const author = ctx.usersById[c.authorId];
+    const mine = !!ctx.myId && c.authorId === ctx.myId;
+    const fileHtml = c.fileUrl
+      ? `<a class="comment-file" href="${c.fileUrl}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(c.fileName || "файл")}${c.fileSize ? ` <span class="comment-file-size">(${formatFileSize(c.fileSize)})</span>` : ""}</a>`
+      : (c._pending && c.fileName ? `<span class="comment-file comment-file-pending">📎 ${escapeHtml(c.fileName)}</span>` : "");
+    return `
+      <div class="comment-row ${mine ? "mine" : ""} ${c._pending ? "pending" : ""}" data-comment-row-id="${c.id}">
+        <div class="comment-bubble" style="--chip-color:${(author && author.color) || "#6d5dfc"}">
+          <div class="comment-meta">
+            <span class="comment-author">${escapeHtml(author ? author.name : "?")}</span>
+            <span class="comment-time">${c._pending ? "отправляется…" : formatCommentTime(c.createdAt)}</span>
+          </div>
+          ${c.text ? `<div class="comment-text">${escapeHtml(c.text)}</div>` : ""}
+          ${fileHtml}
+          ${mine && !c._pending ? `<button type="button" class="comment-delete" data-delete-comment="${c.id}" title="Удалить сообщение" aria-label="Удалить сообщение">×</button>` : ""}
+        </div>
+      </div>`;
+  }
+
+  function bindCommentRowDelete(row) {
+    const btn = row.querySelector("[data-delete-comment]");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const commentId = btn.dataset.deleteComment;
+      const taskId = openTaskId;
+      btn.disabled = true;
+      try {
+        const res = await window.TaskingSync.deleteComment(commentId);
+        if (!res || !res.ok) throw new Error((res && res.error) || "");
+        if (openTaskId !== taskId) return;
+        // Убираем только эту строку из DOM и из массива — не перерисовываем
+        // (и уж тем более не перезапрашиваем с сервера) весь список заново.
+        currentComments = currentComments.filter((c) => c.id !== commentId);
+        commentsCacheByTask.set(taskId, currentComments);
+        row.remove();
+        if (!currentComments.length) commentsList.innerHTML = `<div class="comments-empty">Пока нет ни одного сообщения</div>`;
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message || "Не удалось удалить сообщение");
+      }
+    });
+  }
+
+  // Полная перерисовка — только при первой загрузке чата (или его фоновом
+  // обновлении с сервера). Дальнейшие изменения (отправка/удаление одного
+  // сообщения) идут через appendCommentRow/replaceCommentRow/removeCommentRow,
+  // без пересборки всего списка целиком.
+  function renderComments(comments) {
+    const ctx = commentRenderCtx();
     commentsList.innerHTML = comments.length
-      ? comments.map((c) => {
-          const author = usersById[c.authorId];
-          const mine = !!myId && c.authorId === myId;
-          const fileHtml = c.fileUrl
-            ? `<a class="comment-file" href="${c.fileUrl}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(c.fileName || "файл")}${c.fileSize ? ` <span class="comment-file-size">(${formatFileSize(c.fileSize)})</span>` : ""}</a>`
-            : (c._pending && c.fileName ? `<span class="comment-file comment-file-pending">📎 ${escapeHtml(c.fileName)}</span>` : "");
-          return `
-            <div class="comment-row ${mine ? "mine" : ""} ${c._pending ? "pending" : ""}">
-              <div class="comment-bubble" style="--chip-color:${(author && author.color) || "#6d5dfc"}">
-                <div class="comment-meta">
-                  <span class="comment-author">${escapeHtml(author ? author.name : "?")}</span>
-                  <span class="comment-time">${c._pending ? "отправляется…" : formatCommentTime(c.createdAt)}</span>
-                </div>
-                ${c.text ? `<div class="comment-text">${escapeHtml(c.text)}</div>` : ""}
-                ${fileHtml}
-                ${mine && !c._pending ? `<button type="button" class="comment-delete" data-delete-comment="${c.id}" title="Удалить сообщение" aria-label="Удалить сообщение">×</button>` : ""}
-              </div>
-            </div>`;
-        }).join("")
+      ? comments.map((c) => commentRowHtml(c, ctx)).join("")
       : `<div class="comments-empty">Пока нет ни одного сообщения</div>`;
     commentsList.scrollTop = commentsList.scrollHeight;
+    commentsList.querySelectorAll(".comment-row").forEach(bindCommentRowDelete);
+  }
 
-    commentsList.querySelectorAll("[data-delete-comment]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const commentId = btn.dataset.deleteComment;
-        const taskId = openTaskId;
-        btn.disabled = true;
-        try {
-          const res = await window.TaskingSync.deleteComment(commentId);
-          if (!res || !res.ok) throw new Error((res && res.error) || "");
-          if (openTaskId !== taskId) return;
-          // Убираем только это сообщение из уже отрисованного списка —
-          // не ждём ещё один поход на сервер за всем чатом заново.
-          currentComments = currentComments.filter((c) => c.id !== commentId);
-          commentsCacheByTask.set(taskId, currentComments);
-          renderComments(currentComments);
-        } catch (err) {
-          btn.disabled = false;
-          showToast(err.message || "Не удалось удалить сообщение");
-        }
-      });
-    });
+  // Добавляет ровно одну новую строку в конец списка (своё только что
+  // отправленное сообщение) — без переотрисовки уже показанных сообщений.
+  function appendCommentRow(c) {
+    if (!commentsList.querySelector(".comment-row")) commentsList.innerHTML = "";
+    commentsList.insertAdjacentHTML("beforeend", commentRowHtml(c, commentRenderCtx()));
+    const row = commentsList.lastElementChild;
+    bindCommentRowDelete(row);
+    commentsList.scrollTop = commentsList.scrollHeight;
+  }
+
+  // Заменяет одну "отправляющуюся" строку на подтверждённую сервером
+  // (с настоящим id и временем) — опять же без переотрисовки остальных.
+  function replaceCommentRow(tempId, newComment) {
+    const row = commentsList.querySelector(`[data-comment-row-id="${tempId}"]`);
+    if (!row) return;
+    row.outerHTML = commentRowHtml(newComment, commentRenderCtx());
+    const newRow = commentsList.querySelector(`[data-comment-row-id="${newComment.id}"]`);
+    if (newRow) bindCommentRowDelete(newRow);
+  }
+
+  function removeCommentRow(id) {
+    const row = commentsList.querySelector(`[data-comment-row-id="${id}"]`);
+    if (row) row.remove();
   }
 
   // Подгружает обсуждение при открытии панели деталей. Если для этой
@@ -3708,8 +3757,7 @@
       const file = pendingCommentFile;
       if (!text && !file) return;
 
-      const session = window.TaskingAuth && window.TaskingAuth.getSession();
-      const myId = session && session.user && session.user.id;
+      const myId = commentRenderCtx().myId;
       const tempId = "pending-" + Math.random().toString(36).slice(2);
       const optimistic = {
         id: tempId, taskId, authorId: myId, text,
@@ -3717,7 +3765,7 @@
         createdAt: Date.now(), _pending: true
       };
       currentComments.push(optimistic);
-      renderComments(currentComments);
+      appendCommentRow(optimistic);
       commentText.value = "";
       pendingCommentFile = null;
       renderCommentFileChip();
@@ -3729,11 +3777,11 @@
         const idx = currentComments.findIndex((c) => c.id === tempId);
         if (idx !== -1) currentComments[idx] = res.comment;
         commentsCacheByTask.set(taskId, currentComments);
-        renderComments(currentComments);
+        replaceCommentRow(tempId, res.comment);
       } catch (err) {
         if (openTaskId !== taskId) return;
         currentComments = currentComments.filter((c) => c.id !== tempId);
-        renderComments(currentComments);
+        removeCommentRow(tempId);
         commentText.value = text;
         showToast(err.message);
       }
