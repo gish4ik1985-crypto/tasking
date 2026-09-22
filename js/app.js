@@ -618,6 +618,7 @@
   const trashCountEl = document.getElementById("trashCount");
   const archiveNavBtn = document.getElementById("archiveNavBtn");
   const archiveCountEl = document.getElementById("archiveCount");
+  const unreadCountEl = document.getElementById("unreadCount");
   const archiveCompletedBtn = document.getElementById("archiveCompletedBtn");
   const membersToggleBtn = document.getElementById("membersToggleBtn");
   const membersPanel = document.getElementById("membersPanel");
@@ -1149,7 +1150,7 @@
     const key = `project:${projectId}`;
     if (cache.has(key)) return cache.get(key);
     const ids = new Set(getProjectDescendantIds(projectId));
-    let total = 0, completed = 0, overdue = 0, openCount = 0;
+    let total = 0, completed = 0, overdue = 0, openCount = 0, unread = 0;
     state.projects.forEach((p) => {
       if (!ids.has(p.id)) return;
       p.tasks.forEach((t) => {
@@ -1157,9 +1158,10 @@
         total++;
         if (t.completed) completed++; else openCount++;
         if (isOverdue(p, t)) overdue++;
+        if (isUnreadForMe(t)) unread++;
       });
     });
-    const result = { total, completed, overdue, openCount, pct: total ? Math.round((completed / total) * 100) : 0 };
+    const result = { total, completed, overdue, openCount, unread, pct: total ? Math.round((completed / total) * 100) : 0 };
     cache.set(key, result);
     return result;
   }
@@ -1519,6 +1521,7 @@
         <span class="name">${escapeHtml(project.name)}</span>
         <button class="project-analytics-btn" data-analytics="${project.id}" title="Аналитика проекта" aria-label="Аналитика проекта «${escapeHtml(project.name)}»">📊</button>
         <button class="add-sub-btn" data-parent="${project.id}" title="Добавить подпроект" aria-label="Добавить подпроект в «${escapeHtml(project.name)}»">+</button>
+        ${stats.unread ? `<span class="unread-dot" title="${stats.unread} непрочитанных">${stats.unread}</span>` : ""}
         <span class="count">${stats.openCount || ""}</span>
       `;
       projectListEl.appendChild(item);
@@ -1744,6 +1747,14 @@
     return "";
   }
 
+  // Заголовок непрочитанной чужой задачи рисуем жирным — тот же критерий,
+  // что и у бейджа "новое" выше (своё не считаем непрочитанным).
+  function isUnreadForMe(task) {
+    if (!window.TaskingSync || !task._isUnread) return false;
+    const session = window.TaskingAuth && window.TaskingAuth.getSession();
+    return !!(session && task._creatorId && task._creatorId !== session.user.id);
+  }
+
   // HTML одной карточки задачи на доске: срок, приоритет, счётчик
   // подзадач, теги, аватар исполнителя.
   function taskCardHtml(task, proj) {
@@ -1775,7 +1786,7 @@
       <div class="card ${task.completed ? "completed" : ""}" draggable="true" data-task-id="${task.id}">
         <div class="card-top-row">
           <span class="row-check card-check ${task.completed ? "checked" : ""}" data-task-id="${task.id}" title="Отметить выполненной">✓</span>
-          <div class="card-title">${escapeHtml(task.title)}</div>
+          <div class="card-title${isUnreadForMe(task) ? " title-unread" : ""}">${escapeHtml(task.title)}</div>
         </div>
         <div class="card-meta">${bits.join("")}${avatar}</div>
       </div>
@@ -2194,7 +2205,7 @@
     return `
       <div class="list-row ${task.completed ? "completed" : ""}" draggable="true" data-task-id="${task.id}">
         <span class="row-check ${task.completed ? "checked" : ""}" data-task-id="${task.id}">✓</span>
-        <span class="row-title">${escapeHtml(task.title)}</span>
+        <span class="row-title${isUnreadForMe(task) ? " title-unread" : ""}">${escapeHtml(task.title)}</span>
         <span class="row-tags">${bits.join("")}</span>
         ${avatar}
       </div>
@@ -2324,7 +2335,7 @@
       ${guides}
       ${hasChildren ? `<button class="chevron${collapsed ? "" : " expanded"}" data-toggle-tree="${task.id}" aria-label="${collapsed ? "Развернуть подзадачи" : "Свернуть подзадачи"}" aria-expanded="${!collapsed}">▶</button>` : `<span class="chevron-spacer"></span>`}
       <span class="row-check ${task.completed ? "checked" : ""}" data-tree-toggle="${task.id}">✓</span>
-      <span class="tree-title" data-tree-open="${task.id}">${escapeHtml(task.title)}</span>
+      <span class="tree-title${isUnreadForMe(task) ? " title-unread" : ""}" data-tree-open="${task.id}">${escapeHtml(task.title)}</span>
       ${statusLabel ? `<span class="status-chip">${escapeHtml(statusLabel)}</span>` : ""}
       ${syncStatusBadgeHtml(task)}
       ${eff.due ? `<span class="badge badge-due ${isOverdue(proj, task) ? "overdue" : ""}"${eff.auto ? ' title="Вычислено по подзадачам"' : ""}>${formatDue(eff.due)}</span>` : ""}
@@ -2829,7 +2840,7 @@
           <div class="gantt-name-cell" data-open="${task.id}" title="${escapeHtml(task.title)}">
             ${guides}
             ${hasChildren ? `<button class="chevron${collapsed ? "" : " expanded"}" data-toggle-tree="${task.id}" aria-label="${collapsed ? "Развернуть подзадачи" : "Свернуть подзадачи"}" aria-expanded="${!collapsed}">▶</button>` : `<span class="chevron-spacer"></span>`}
-            <span class="gantt-title">${escapeHtml(task.title)}</span>
+            <span class="gantt-title${isUnreadForMe(task) ? " title-unread" : ""}">${escapeHtml(task.title)}</span>
             ${syncStatusBadgeHtml(task)}
             ${blockedIcon}
             <div class="gantt-resize-handle" title="Потяните, чтобы изменить ширину колонки"></div>
@@ -3124,6 +3135,7 @@
     if (window.TaskingSync && (task._isUnread || task._isChanged)) {
       task._isUnread = false;
       task._isChanged = false;
+      stateVersion++; // иначе кэш getProjectStats (счётчик непрочитанных в сайдбаре) не обновится сразу
       window.TaskingSync.markViewed(taskId);
       renderAll(true);
     }
@@ -3756,6 +3768,15 @@
     return count;
   }
 
+  // Сколько всего чужих непрочитанных задач по всем проектам — счётчик
+  // у кнопки "Дашборд" в сайдбаре (глобальное уведомление, см. также
+  // isUnreadForMe/badge "новое" у отдельных задач).
+  function getUnreadCount() {
+    let count = 0;
+    state.projects.forEach((p) => p.tasks.forEach((t) => { if (!t.archived && isUnreadForMe(t)) count++; }));
+    return count;
+  }
+
   // Экран "Архив": заархивированные задачи по всем проектам сразу — убраны
   // из обычных видов независимо от "показывать выполненные" (см. F18 —
   // раньше выполненные задачи оставались в списках навсегда и размывали
@@ -4036,6 +4057,9 @@
     const archivedCount = getArchivedCount();
     archiveCountEl.hidden = !archivedCount;
     archiveCountEl.textContent = archivedCount || "";
+    const unreadCount = getUnreadCount();
+    unreadCountEl.hidden = !unreadCount;
+    unreadCountEl.textContent = unreadCount || "";
 
     if (state.screen === "dashboard") {
       dashboardWrap.hidden = false;

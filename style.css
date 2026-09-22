@@ -212,6 +212,20 @@ body {
   color: var(--text-faint);
 }
 
+.project-item .unread-dot {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .project-item .add-sub-btn {
   border: none;
   background: transparent;
@@ -1830,6 +1844,11 @@ body {
   padding: 2px 6px;
   border-radius: 999px;
 }
+.nav-unread-count { background: var(--danger); }
+
+/* Жирный заголовок — чужая задача, которую ещё не открывали (см. бейдж
+   "новое" в syncStatusBadgeHtml/isUnreadForMe в app.js). */
+.title-unread { font-weight: 700; }
 
 .trash-empty-btn {
   border: 1px solid var(--border);
