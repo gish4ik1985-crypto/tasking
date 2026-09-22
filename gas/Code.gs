@@ -102,6 +102,7 @@ function route(action, body) {
     case 'updateProfile': return handleUpdateProfile(userId, body.profile);
     case 'listUsers': return handleListUsers();
     case 'getState': return handleGetState(userId);
+    case 'createStarterProject': return handleCreateStarterProject(userId);
     case 'saveProject': return handleSaveProject(userId, body.project);
     case 'saveSection': return handleSaveSection(userId, body.section);
     case 'saveTask': return handleSaveTask(userId, body.task);
@@ -239,6 +240,26 @@ function handleGetState(userId) {
 }
 
 // ---------- Запись (с проверкой прав) ----------
+
+// Создаёт пустой стартовый проект с тремя разделами одним HTTP-запросом
+// (а не четырьмя последовательными — см. js/sync.js, ensureStarterProject).
+// Каждый вызов Apps Script — это отдельный медленный round-trip (секунды),
+// а сама работа с листами внутри одного запуска — быстрая; объединение в
+// один вызов сократило время первого входа примерно с 30 до ~8 секунд.
+function handleCreateStarterProject(userId) {
+  var project = { id: Utilities.getUuid(), name: 'Мои задачи', creatorId: userId, updatedAt: Date.now() };
+  project.createdAt = project.updatedAt;
+  upsertRow(SHEET_PROJECTS, project);
+
+  var sectionNames = ['К выполнению', 'В работе', 'Готово'];
+  var sections = sectionNames.map(function (name, i) {
+    var section = { id: Utilities.getUuid(), projectId: project.id, name: name, order: i };
+    upsertRow(SHEET_SECTIONS, section);
+    return section;
+  });
+
+  return { ok: true, project: project, sections: sections };
+}
 
 function handleSaveProject(userId, project) {
   if (!project) return { ok: false, error: 'нет project' };

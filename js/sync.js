@@ -118,17 +118,13 @@
   // сервере) один пустой стартовый проект, чтобы это состояние вообще не
   // возникало на экране.
   async function ensureStarterProject(stateRes) {
-    const projRes = await api("saveProject", { project: { name: "Мои задачи" } });
-    if (!projRes.ok) return;
-    const project = projRes.project;
-    const sectionNames = ["К выполнению", "В работе", "Готово"];
-    const sections = [];
-    for (let i = 0; i < sectionNames.length; i++) {
-      const secRes = await api("saveSection", { section: { projectId: project.id, name: sectionNames[i], order: i } });
-      if (secRes.ok) sections.push(secRes.section);
-    }
-    stateRes.projects.push(Object.assign({}, project, { canEdit: true }));
-    sections.forEach((s) => stateRes.sections.push(Object.assign({}, s, { canEdit: true })));
+    // Один запрос вместо четырёх (проект + 3 раздела) — каждый запрос к
+    // Apps Script ощутимо небыстрый сам по себе, так что объединение в
+    // один вызов на сервере заметно ускоряет самый первый вход.
+    const res = await api("createStarterProject", {});
+    if (!res.ok) return;
+    stateRes.projects.push(Object.assign({}, res.project, { canEdit: true }));
+    res.sections.forEach((s) => stateRes.sections.push(Object.assign({}, s, { canEdit: true })));
   }
 
   async function pull() {
