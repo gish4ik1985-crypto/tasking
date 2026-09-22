@@ -218,7 +218,13 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.projects) && parsed.projects.length) return normalizeState(parsed);
+        // Пустой массив projects — это ЗАКОННОЕ состояние (например, только
+        // что вошедший пользователь без единой своей/назначенной задачи,
+        // см. js/sync.js), а не признак "тут ничего не сохранено". Раньше
+        // пустой массив тоже уходил в демо-данные — это было бы не только
+        // не к месту при входе через API, но и странно для обычного
+        // локального пользователя, удалившего последний проект.
+        if (parsed && Array.isArray(parsed.projects)) return normalizeState(parsed);
       }
     } catch (e) { /* повреждённые данные в хранилище — просто начинаем заново */ }
     return normalizeState(seedState());
@@ -377,6 +383,12 @@
     renderAll();
   }
 
+  // js/sync.js периодически опрашивает сервер (другие люди могли что-то
+  // поменять) и, если данные новее, отдаёт их сюда через этот же самый
+  // механизм, что и обычная межвкладочная синхронизация — значит,
+  // несохранённые правки не затираются молча, а спрашиваются через тост.
+  window.TaskingApplyExternalState = applyExternalState;
+
   // Действительно пишет состояние в localStorage прямо сейчас (без
   // задержки) и обрабатывает ошибку переполнения/недоступности хранилища.
   // force=true пропускает проверку конфликта с другой вкладкой (см. ниже) —
@@ -403,6 +415,10 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       lastAppliedUpdatedAt = state.updatedAt;
       dirty = false;
+      // Синхронизация с сервером (js/sync.js) — если приложение открыто с
+      // входом (не гостевой локальный режим), эта же единая точка
+      // сохранения отправляет изменённые проекты/разделы/задачи в API.
+      if (window.TaskingSync) window.TaskingSync.push(state);
     } catch (e) {
       console.error("Не удалось сохранить состояние в localStorage:", e);
       if (!saveErrorShown) {
@@ -647,6 +663,7 @@
 
   const detailPanel = document.getElementById("detailPanel");
   const detailBreadcrumb = document.getElementById("detailBreadcrumb");
+  const detailReadonlyBanner = document.getElementById("detailReadonlyBanner");
   const detailComplete = document.getElementById("detailComplete");
   const detailClose = document.getElementById("detailClose");
   const detailTitle = document.getElementById("detailTitle");
@@ -1682,6 +1699,18 @@
 
   // ---------- отрисовка: вид "Доска" (канбан-колонки по статусам) ----------
 
+  // Бейдж "новое"/"изменено" (js/sync.js) — только для задач, которые
+  // создал кто-то ДРУГОЙ (свои собственные не считаем "непрочитанными",
+  // даже если формально ни разу не открывали панель деталей).
+  function syncStatusBadgeHtml(task) {
+    if (!window.TaskingSync) return "";
+    const session = window.TaskingAuth && window.TaskingAuth.getSession();
+    if (!session || !task._creatorId || task._creatorId === session.user.id) return "";
+    if (task._isUnread) return `<span class="badge badge-sync-new" title="Вы ещё не открывали эту задачу">● новое</span>`;
+    if (task._isChanged) return `<span class="badge badge-sync-changed" title="Изменена с последнего просмотра">✎ изменено</span>`;
+    return "";
+  }
+
   // HTML одной карточки задачи на доске: срок, приоритет, счётчик
   // подзадач, теги, аватар исполнителя.
   function taskCardHtml(task, proj) {
@@ -1704,6 +1733,7 @@
         bits.push(`<span class="badge badge-blocked" title="Ждёт выполнения: ${escapeHtml(blockers.map((b) => b.title).join(", "))}">⛔ ждёт</span>`);
       }
     }
+    bits.unshift(syncStatusBadgeHtml(task));
     bits.push(autoTagsHtml(proj, task));
     task.tags.forEach((t) => bits.push(`<span class="tag-chip">${escapeHtml(t)}</span>`));
     const aName = assigneeName(task);
@@ -2123,6 +2153,7 @@
         bits.push(`<span class="badge badge-blocked" title="Ждёт выполнения: ${escapeHtml(blockers.map((b) => b.title).join(", "))}">⛔ ждёт</span>`);
       }
     }
+    bits.unshift(syncStatusBadgeHtml(task));
     bits.push(autoTagsHtml(proj, task));
     task.tags.forEach((t) => bits.push(`<span class="tag-chip">${escapeHtml(t)}</span>`));
     const aName = assigneeName(task);
@@ -2262,6 +2293,7 @@
       <span class="row-check ${task.completed ? "checked" : ""}" data-tree-toggle="${task.id}">✓</span>
       <span class="tree-title" data-tree-open="${task.id}">${escapeHtml(task.title)}</span>
       ${statusLabel ? `<span class="status-chip">${escapeHtml(statusLabel)}</span>` : ""}
+      ${syncStatusBadgeHtml(task)}
       ${eff.due ? `<span class="badge badge-due ${isOverdue(proj, task) ? "overdue" : ""}"${eff.auto ? ' title="Вычислено по подзадачам"' : ""}>${formatDue(eff.due)}</span>` : ""}
       ${task.priority && task.priority !== "medium" ? `<span class="badge badge-priority-${task.priority}">${priorityLabel(task.priority)}</span>` : ""}
       ${!task.completed && getBlockingDependencies(proj, task).length ? `<span class="badge badge-blocked" title="Ждёт выполнения: ${escapeHtml(getBlockingDependencies(proj, task).map((b) => b.title).join(", "))}">⛔ ждёт</span>` : ""}
@@ -2765,6 +2797,7 @@
             ${guides}
             ${hasChildren ? `<button class="chevron${collapsed ? "" : " expanded"}" data-toggle-tree="${task.id}" aria-label="${collapsed ? "Развернуть подзадачи" : "Свернуть подзадачи"}" aria-expanded="${!collapsed}">▶</button>` : `<span class="chevron-spacer"></span>`}
             <span class="gantt-title">${escapeHtml(task.title)}</span>
+            ${syncStatusBadgeHtml(task)}
             ${blockedIcon}
             <div class="gantt-resize-handle" title="Потяните, чтобы изменить ширину колонки"></div>
           </div>
@@ -3027,6 +3060,15 @@
     if (!task) return;
     openTaskId = taskId;
     openTaskProjectId = proj.id;
+    // Снимаем бейдж "новое"/"изменено" (js/sync.js) — сразу в памяти, на
+    // сервер уходит в фоне. renderAll(true) тут же обновляет карточку под
+    // модальным окном, иначе бейдж провисел бы до следующей перерисовки.
+    if (window.TaskingSync && (task._isUnread || task._isChanged)) {
+      task._isUnread = false;
+      task._isChanged = false;
+      window.TaskingSync.markViewed(taskId);
+      renderAll(true);
+    }
 
     detailPanel.hidden = false;
     detailComplete.classList.toggle("checked", task.completed);
@@ -3083,6 +3125,26 @@
     renderSubtaskSection();
     renderDepsSection();
     renderConflictWarning();
+
+    // Если задачу назначили на вас, но создал её кто-то другой — сервер
+    // всё равно примет только "выполнено" и заметку (см. gas/Code.gs,
+    // ASSIGNEE_EDITABLE_TASK_FIELDS), остальные поля молча проигнорирует.
+    // Блокируем их и в интерфейсе, чтобы это не было сюрпризом.
+    const readOnly = task._canEdit === false;
+    detailReadonlyBanner.hidden = !readOnly;
+    detailTitle.readOnly = readOnly;
+    detailSection.disabled = readOnly;
+    detailAssignee.disabled = readOnly;
+    detailStart.disabled = readOnly || detailStart.disabled;
+    detailDue.disabled = readOnly || detailDue.disabled;
+    detailPriority.disabled = readOnly;
+    detailEstimate.disabled = readOnly;
+    detailTags.disabled = readOnly;
+    detailDelete.disabled = readOnly;
+    datesAutoToggleBtn.disabled = readOnly;
+    subtaskAddInput.disabled = readOnly;
+    depsAddSelect.disabled = readOnly;
+
     openModalFocus(detailPanel, detailTitle);
   }
 

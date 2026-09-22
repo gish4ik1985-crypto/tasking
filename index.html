@@ -190,6 +190,9 @@
       </div>
       <div class="detail-body">
         <div class="detail-breadcrumb" id="detailBreadcrumb" hidden></div>
+        <div class="detail-readonly-banner" id="detailReadonlyBanner" hidden>
+          🔒 Эта задача назначена вам, но её создал другой человек — можно отметить выполнение и написать заметку, остальное менять нельзя.
+        </div>
 
         <textarea class="detail-title" id="detailTitle" rows="1" placeholder="Название задачи"></textarea>
 
@@ -328,7 +331,11 @@
 </div>
 
 <script src="js/utils.js"></script>
-<script src="js/analytics.js"></script>
-<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/sync.js"></script>
+<!-- analytics.js и app.js теперь загружаются НЕ отсюда, а динамически из
+     js/auth.js — только после успешного входа и загрузки задач с сервера
+     (см. loadAppScripts() в auth.js). Так неавторизованный посетитель не
+     получает вообще никакого кода приложения, только стартовую страницу. -->
 </body>
 </html>
