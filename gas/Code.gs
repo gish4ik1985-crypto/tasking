@@ -408,6 +408,19 @@ function handleGetState(userId) {
 // а сама работа с листами внутри одного запуска — быстрая; объединение в
 // один вызов сократило время первого входа примерно с 30 до ~8 секунд.
 function handleCreateStarterProject(userId) {
+  // Идемпотентность: клиент зовёт это, когда getState вернул 0 проектов —
+  // а это может случиться не только при первом входе, но и мимолётно
+  // (например, между очисткой листа Projects и завершением повторной
+  // заливки JSON). Без этой проверки каждый такой момент плодил ещё одну
+  // "Мои задачи" — реальный случай: у пользователя накопилось три штуки.
+  // Поэтому сначала смотрим, нет ли у него уже СВОЕГО проекта, и если
+  // есть — просто отдаём его как есть, ничего не создавая заново.
+  var existingProject = readRows(SHEET_PROJECTS).find(function (p) { return p.creatorId === userId; });
+  if (existingProject) {
+    var existingSections = readRows(SHEET_SECTIONS).filter(function (s) { return s.projectId === existingProject.id; });
+    return { ok: true, project: existingProject, sections: existingSections };
+  }
+
   var project = { id: Utilities.getUuid(), name: 'Мои задачи', creatorId: userId, updatedAt: Date.now() };
   project.createdAt = project.updatedAt;
   upsertRow(SHEET_PROJECTS, project);
