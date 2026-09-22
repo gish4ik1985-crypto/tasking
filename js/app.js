@@ -2786,11 +2786,19 @@
     // запаса, до самой поздней даты плюс 4 дня запаса (чтобы полосы не
     // упирались в край).
     const today = todayStr();
+    // Отсеиваем всё, что strToDate не может разобрать в настоящую дату
+    // (мусорная строка после старого/ручного импорта и т.п.) — иначе
+    // ОДНА такая дата делает startD/endD "Invalid Date", (endD-startD)
+    // превращается в NaN, а Math.max(90, NaN) — тоже NaN: цикл построения
+    // шкалы `for (i=0; i<NaN; i++)` не выполняется НИ РАЗУ, и вся шапка
+    // Ганта (месяцы/числа) молча пропадает, хотя сам список задач рисуется
+    // отдельно и остаётся на месте — именно так этот баг и выглядел.
+    const isValidDateStr = (s) => typeof s === "string" && !isNaN(strToDate(s).getTime());
     const allDates = [];
     rows.forEach((row) => {
       const eff = row.type === "task" ? getEffectiveDates(row.proj, row.task) : getProjectDateRange(row.project);
-      if (eff.start) allDates.push(eff.start);
-      if (eff.due) allDates.push(eff.due);
+      if (isValidDateStr(eff.start)) allDates.push(eff.start);
+      if (isValidDateStr(eff.due)) allDates.push(eff.due);
     });
     const rangeBase = allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : today;
     const rangeMax = allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : today;
@@ -2801,8 +2809,13 @@
     endD.setDate(endD.getDate() + 4);
     // Минимум ~3 месяца в ширину, даже если у видимых задач узкий разброс
     // дат (или дат вовсе нет) — иначе Гант показывает одну неделю и
-    // сразу упирается в край, вместо обзора на перспективу.
-    const totalDays = Math.max(90, Math.round((endD - startD) / 86400000) + 1);
+    // сразу упирается в край, вместо обзора на перспективу. Запасной
+    // вариант на 90, если разница дат всё же оказалась не-числом —
+    // отсекли выше не все возможные причины (например, rangeBase/rangeMax
+    // сами по себе валидны, но startD/endD после setDate ушли в диапазон,
+    // который Date не может представить).
+    const rawTotalDays = Math.round((endD - startD) / 86400000) + 1;
+    const totalDays = Number.isFinite(rawTotalDays) ? Math.max(90, rawTotalDays) : 90;
 
     // Смещение даты от начала шкалы в днях (пригодится для позиции полосы в пикселях).
     function dayOffset(dateStr) {
