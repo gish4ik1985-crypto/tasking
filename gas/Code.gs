@@ -91,14 +91,34 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.TEXT);
 }
 
+// Действия, которые пишут в таблицу — для них нужна блокировка (см. ниже).
+// Чтения (getState/listUsers/whoAmI) в неё не берём, чтобы не тормозить
+// параллельную работу нескольких людей без необходимости.
+var WRITE_ACTIONS = ['login', 'updateProfile', 'createStarterProject', 'saveProject', 'saveSection', 'saveTask',
+  'deleteTask', 'deleteProject', 'deleteSection', 'markViewed', 'adminUpdateUser', 'adminDeleteUser'];
+
 function doPost(e) {
   var body = {};
   try { body = JSON.parse(e.postData.contents); } catch (err) { /* пустое тело */ }
   var result;
+  // Apps Script не гарантирует, что два одновременных запроса не увидят
+  // одно и то же "старое" состояние листа — без блокировки два почти
+  // синхронных вызова saveProject/saveTask/... для ЕЩЁ НЕ существующей
+  // записи оба решают, что её нужно создать, и оба дописывают строку с
+  // одним и тем же id (реальный случай: два экземпляра одной "Брусники"
+  // в листе Projects). Из-за этого же retry-логика на клиенте (при
+  // потере ответа после реально успешной записи) могла задваивать
+  // данные — с локом повторный запрос увидит уже сохранённую строку и
+  // корректно её обновит, а не создаст вторую.
+  var needsLock = WRITE_ACTIONS.indexOf(body.action) !== -1;
+  var lock = needsLock ? LockService.getScriptLock() : null;
   try {
+    if (lock) lock.waitLock(15000);
     result = route(body.action, body);
   } catch (err) {
     result = { ok: false, error: String(err) };
+  } finally {
+    if (lock) lock.releaseLock();
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -243,9 +263,23 @@ function requireSession(token) {
 // ---------- State (только своё + то, что назначено) ----------
 
 function handleGetState(userId) {
-  var allProjects = readRows(SHEET_PROJECTS);
-  var allSections = readRows(SHEET_SECTIONS);
-  var allTasks = readRows(SHEET_TASKS);
+  // dedupeById — на случай, если в листе всё же оказались две строки с
+  // одинаковым id (см. WRITE_ACTIONS/LockService в doPost — обычно такого
+  // больше не будет, но старые задвоенные строки, если где-то остались,
+  // отфильтровать не помешает). Обычная (не админская) ветка ниже и так
+  // защищена от этого — там записи собираются в объект по id, что само по
+  // себе схлопывает дубли; админский режим отдавал все строки как есть.
+  function dedupeById(rows) {
+    var seen = {};
+    return rows.filter(function (r) {
+      if (seen[r.id]) return false;
+      seen[r.id] = true;
+      return true;
+    });
+  }
+  var allProjects = dedupeById(readRows(SHEET_PROJECTS));
+  var allSections = dedupeById(readRows(SHEET_SECTIONS));
+  var allTasks = dedupeById(readRows(SHEET_TASKS));
 
   // Администратор видит и может редактировать абсолютно всё у всех —
   // короткий путь в обход обычной фильтрации по правам.
