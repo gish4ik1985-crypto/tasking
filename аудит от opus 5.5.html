@@ -1,0 +1,772 @@
+<meta charset="utf-8">
+<title>Аудит Tasking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@500;700&display=swap">
+<style>
+:root {
+  --ground: #f6f5fa;
+  --surface: #ffffff;
+  --ink: #1f1d2b;
+  --dim: #5f5b76;
+  --faint: #8a86a3;
+  --line: #e4e1ef;
+  --accent: #5b4be0;
+  --accent-soft: #eeebff;
+  --crit: #b3261e;  --crit-soft: #fbe9e7;
+  --high: #b8520f;  --high-soft: #fdefe3;
+  --med:  #8a6400;  --med-soft:  #faf1d9;
+  --low:  #3d7358;  --low-soft:  #e5f4ec;
+  --yes:  #2f7a52;  --yes-soft:  #e4f4ea;
+  --part: #8a6400;  --part-soft: #faf1d9;
+  --no:   #6b6786;  --no-soft:   #efeef5;
+  --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --body: "Golos Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #15141b; --surface: #1d1c26; --ink: #ecebf4; --dim: #a7a3bf; --faint: #7f7a9c; --line: #312e40;
+    --accent: #a198ff; --accent-soft: #2a2645;
+    --crit: #ff8a80; --crit-soft: #3b1f1d;
+    --high: #ffab6b; --high-soft: #3a2616;
+    --med: #e9c262; --med-soft: #342a14;
+    --low: #7dd3a8; --low-soft: #173127;
+    --yes: #7dd3a8; --yes-soft: #173127;
+    --part: #e9c262; --part-soft: #342a14;
+    --no: #a7a3bf; --no-soft: #262433;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #15141b; --surface: #1d1c26; --ink: #ecebf4; --dim: #a7a3bf; --faint: #7f7a9c; --line: #312e40;
+  --accent: #a198ff; --accent-soft: #2a2645;
+  --crit: #ff8a80; --crit-soft: #3b1f1d;
+  --high: #ffab6b; --high-soft: #3a2616;
+  --med: #e9c262; --med-soft: #342a14;
+  --low: #7dd3a8; --low-soft: #173127;
+  --yes: #7dd3a8; --yes-soft: #173127;
+  --part: #e9c262; --part-soft: #342a14;
+  --no: #a7a3bf; --no-soft: #262433;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15.5px;
+  line-height: 1.6;
+  padding-inline: 20px;
+  padding-block: 40px 80px;
+}
+table { font-size: inherit; }
+.page { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+code, .ref { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--accent-soft); color: var(--ink); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.ref { color: var(--faint); overflow-wrap: anywhere; }
+h1, h2 { font-family: var(--display); font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.1; }
+h2 { font-size: 22px; line-height: 1.25; }
+h3 { font-size: 17px; line-height: 1.35; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.lede { font-size: 18px; color: var(--dim); max-width: 64ch; }
+
+/* ---- шапка ---- */
+.head { display: flex; flex-direction: column; gap: 18px; }
+.verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+.verdict p { max-width: 70ch; }
+.verdict strong { color: var(--ink); }
+.tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); text-decoration: none; color: inherit; }
+.tile:hover { border-color: var(--accent); }
+.tile b { font-family: var(--display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile span { font-size: 13px; color: var(--dim); }
+.tile.crit b { color: var(--crit); }
+.tile.high b { color: var(--high); }
+.tile.med b { color: var(--med); }
+.tile.low b { color: var(--low); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+.toc a { text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 16px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+.sec-head p { color: var(--dim); max-width: 68ch; }
+
+/* ---- сильные стороны ---- */
+.good { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 28px; }
+.good li { padding-left: 22px; position: relative; color: var(--dim); }
+.good li::before { content: "✓"; position: absolute; left: 0; color: var(--yes); font-weight: 700; }
+.good li b { color: var(--ink); font-weight: 600; }
+
+/* ---- находки ---- */
+.group { display: flex; flex-direction: column; }
+.group-title { display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px; border-bottom: 2px solid var(--line); }
+.group-title h2 { font-size: 19px; }
+.group-title .cnt { color: var(--faint); font-size: 14px; }
+.finding { padding: 20px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 64px 1fr; gap: 4px 16px; }
+.finding:last-child { border-bottom: none; }
+.sev { font-family: var(--mono); font-size: 13px; font-weight: 500; padding: 3px 0; border-radius: 6px; text-align: center; height: fit-content; }
+.sev.crit { background: var(--crit-soft); color: var(--crit); }
+.sev.high { background: var(--high-soft); color: var(--high); }
+.sev.med { background: var(--med-soft); color: var(--med); }
+.sev.low { background: var(--low-soft); color: var(--low); }
+.f-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.f-body dl { margin: 0; display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; font-size: 14.5px; }
+.f-body dt { color: var(--faint); font-size: 13px; padding-top: 2px; }
+.f-body dd { margin: 0; color: var(--dim); max-width: 66ch; }
+.f-body dd.fix { color: var(--ink); }
+.note { font-size: 13.5px; color: var(--dim); background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; max-width: 70ch; }
+.short { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.short li { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--dim); font-size: 14.5px; }
+.short li:last-child { border-bottom: none; }
+.short li b { color: var(--ink); font-weight: 600; }
+
+/* ---- замер ---- */
+.chart-box { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 10px; }
+.chart-box .cap { font-size: 13.5px; color: var(--dim); max-width: 70ch; }
+.chart-scroll { overflow-x: auto; }
+.chart-scroll svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.ax { stroke: var(--line); stroke-width: 1; }
+.grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.t-dim { fill: var(--dim); font-family: var(--body); font-size: 12px; }
+.t-ink { fill: var(--ink); font-family: var(--body); font-size: 13px; font-weight: 600; }
+.t-crit { fill: var(--crit); font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.dot:hover { r: 7; }
+.dot-out { fill: var(--crit); stroke: var(--surface); stroke-width: 2; }
+.med-line { stroke: var(--accent); stroke-width: 2; opacity: 0.45; }
+.num-list { font-family: var(--mono); font-size: 12.5px; color: var(--faint); overflow-wrap: anywhere; }
+
+/* ---- таблицы ---- */
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); background: var(--surface); }
+tbody tr:last-child td { border-bottom: none; }
+td.grp { font-family: var(--display); font-size: 13px; font-weight: 500; color: var(--accent); background: var(--accent-soft); padding-block: 7px; }
+td { font-size: 14.5px; color: var(--dim); }
+td:first-child { color: var(--ink); }
+.chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.chip.yes { background: var(--yes-soft); color: var(--yes); }
+.chip.part { background: var(--part-soft); color: var(--part); }
+.chip.no { background: var(--no-soft); color: var(--no); border: 1px solid var(--line); }
+.prio { font-size: 13px; white-space: nowrap; }
+.prio.p1 { color: var(--crit); font-weight: 600; }
+.prio.p2 { color: var(--high); font-weight: 600; }
+.prio.p3 { color: var(--dim); }
+.opts td:first-child { color: var(--faint); font-size: 13px; }
+.opts td { color: var(--ink); }
+
+/* ---- план ---- */
+.road { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; counter-reset: stage -1; }
+.road li { counter-increment: stage; display: grid; grid-template-columns: 44px 1fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.road li:last-child { border-bottom: none; }
+.road li::before { content: counter(stage); font-family: var(--display); font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.road .st { display: flex; flex-direction: column; gap: 4px; }
+.road .when { font-size: 13px; color: var(--faint); }
+.road p { color: var(--dim); max-width: 68ch; font-size: 14.5px; }
+.road p b { color: var(--ink); font-weight: 600; }
+.pick { background: var(--surface); border: 1px solid var(--accent); border-radius: 14px; padding: 18px 22px; display: flex; flex-direction: column; gap: 8px; }
+.pick p { max-width: 70ch; }
+
+footer { color: var(--faint); font-size: 13.5px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 20px; }
+footer p { max-width: 72ch; }
+
+@media (max-width: 560px) {
+  body { font-size: 15px; padding-inline: 16px; }
+  .finding, .short li { grid-template-columns: 1fr; gap: 8px; }
+  .sev { width: fit-content; padding: 3px 10px; }
+  .f-body dl { grid-template-columns: 1fr; gap: 2px; }
+  .f-body dd { margin-bottom: 6px; }
+  .road li { grid-template-columns: 30px 1fr; gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+
+  <header class="head">
+    <div class="eyebrow">Tasking · аудит от Opus 5.5 · 23 сентября 2026</div>
+    <h1>Аудит Tasking</h1>
+    <p class="lede">Цель — быстрый и надёжный задачник для команды: доски и списки как в Asana, план и Гант как в MS Project, обсуждение и согласования как в Pyrus. Ниже — что уже работает, что сломано, что тормозит и что добавить, по порядку важности.</p>
+
+    <div class="verdict">
+      <div class="eyebrow">Вердикт</div>
+      <p><strong>Функциональная база сильная</strong> — по видам и планированию Tasking уже ближе к MS Project, чем большинство самописных задачников, код аккуратный, тесты зелёные.</p>
+      <p>Держат его две вещи. Первая — <strong>несколько реальных дыр в сохранности данных и безопасности</strong>: правки могут молча теряться или затирать чужие, корзина не спасает переписку, а через поле «цвет» можно захватить аккаунт админа. Их стоит закрыть до того, как в системе станет больше людей. Вторая — <strong>потолок скорости Google Apps Script</strong>: любой запрос к серверу занимает около 2 секунд, даже пустой, и это не лечится оптимизацией кода — только интерфейсом, который не ждёт сервер, или сменой сервера.</p>
+    </div>
+
+    <div class="tally">
+      <a class="tile crit" href="#critical"><b>5</b><span>критичных</span></a>
+      <a class="tile high" href="#high"><b>10</b><span>высокий приоритет</span></a>
+      <a class="tile med" href="#medium"><b>7</b><span>средний</span></a>
+      <a class="tile low" href="#low"><b>4</b><span>мелочи</span></a>
+      <a class="tile" href="#speed"><b>≈2,2 с</b><span>медиана запроса к серверу</span></a>
+    </div>
+
+    <nav class="toc" aria-label="Содержание">
+      <a href="#good">Что уже хорошо</a>
+      <a href="#critical">Критично</a>
+      <a href="#high">Высокий приоритет</a>
+      <a href="#speed">Замер скорости</a>
+      <a href="#medium">Средний</a>
+      <a href="#low">Мелочи</a>
+      <a href="#features">Функции против Asana / Project / Pyrus</a>
+      <a href="#backend">Решение по серверу</a>
+      <a href="#plan">План работ</a>
+      <a href="#method">Как проверял</a>
+    </nav>
+  </header>
+
+  <section id="good">
+    <div class="sec-head">
+      <h2>Что уже хорошо</h2>
+      <p>Это стоит сохранить при любых переделках — на этом фундаменте всё остальное делается быстро.</p>
+    </div>
+    <ul class="good">
+      <li><b>Правильная граница в архитектуре.</b> Интерфейс работает с локальными данными, а весь обмен с сервером собран в одном мосте <code>js/sync.js</code>. Сменить сервер — значит переписать один-два файла, а не всё приложение.</li>
+      <li><b>Правки на экране мгновенны.</b> Изменение сначала попадает в память и localStorage, в сеть уходит в фоне.</li>
+      <li><b>Богатый набор возможностей.</b> Пять видов, подпроекты, авторасчёт сроков по подзадачам, зависимости, конфликты загрузки, Ctrl+K, Ctrl+Z, архив, корзина, ссылки на экран в адресной строке, синхронизация вкладок, чат и файлы.</li>
+      <li><b>Права проверяет сервер.</b> Автор / исполнитель / наблюдатель / участник / админ, блокировка записи от задвоений, защита от циклов в дереве проектов.</li>
+      <li><b>Доступность продумана.</b> Фокус-ловушки в модальных окнах, возврат фокуса, aria-атрибуты, работа с клавиатуры.</li>
+      <li><b>44 теста проходят, линтер без ошибок.</b> Для самописного проекта это редкость.</li>
+    </ul>
+  </section>
+
+  <section id="critical">
+    <div class="group">
+      <div class="group-title"><h2>Критично</h2><span class="cnt">5 · исправить в первую очередь</span></div>
+
+      <article class="finding">
+        <span class="sev crit">К1</span>
+        <div class="f-body">
+          <h3>Через поле «цвет» можно захватить аккаунт админа</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Сервер принимает в «цвет» профиля и проекта любую строку, а клиент вставляет её в HTML без экранирования — в панели пользователей админа и в чипах людей, в пузырях чата, в точках проектов.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Любой зарегистрировавшийся (а это может быть кто угодно, см. К5) одним запросом к API ставит себе «цвет» с кодом. Когда админ открывает «Пользователи», код выполняется в его браузере и забирает токен админа — дальше полный доступ ко всем данным.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">На сервере принимать цвет только по шаблону <code>#rrggbb</code>; на клиенте всё, что пришло с сервера, пропускать через <code>escapeHtml</code>, включая атрибуты. Около получаса работы.</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:207 · js/admin.js:54 · js/app.js:1566, 1734, 2465, 3182, 3571, 4200</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev crit">К2</span>
+        <div class="f-body">
+          <h3>Изменение считается сохранённым, даже если сервер отказал</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>После любого ответа сервера запись помечается как отправленная. Ответ <code>{ok:false}</code> — таймаут общей блокировки через 15 секунд, «нет прав», ошибка листа — не проверяется.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Когда несколько человек работают одновременно, часть правок молча не доходит до таблицы и больше не отправляется повторно — пока эту же задачу не тронут снова. На экране всё выглядит сохранённым.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Обновлять снимок только при <code>res.ok</code>; при ошибке — повтор с паузой и видимый статус «не сохранено».</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:299, 328</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev crit">К3</span>
+        <div class="f-body">
+          <h3>Сохранение отправляет задачу целиком и затирает чужие правки</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Клиент шлёт все поля задачи, сервер накладывает их поверх строки.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Исполнитель отметил задачу выполненной и написал заметку. Автор, у которого свежие данные ещё не подтянулись (опрос раз в 25 секунд), через 10 секунд меняет приоритет — и отправляет старые «не выполнено» и старую заметку. Работа исполнителя молча откатывается.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Отправлять только изменённые поля (сравнение со снимком), сервер обновляет только присланное. Дополнительно — сверка <code>updatedAt</code> и предупреждение о конфликте.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:229 (taskPayload) · gas/Code.gs:508 (handleSaveTask)</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev crit">К4</span>
+        <div class="f-body">
+          <h3>Корзина обещает восстановление, которого нет</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Корзина хранится только в localStorage одного браузера, а удаление сразу уходит на сервер: строка стирается, вместе с ней — чат и файлы в Drive. Восстановление из корзины или Ctrl+Z создаёт задачу заново: автором становится тот, кто восстановил, переписка и вложения не возвращаются, на другом устройстве корзина пуста.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Случайное удаление — безвозвратная потеря обсуждения и файлов; смена автора меняет, кто может редактировать задачу.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Мягкое удаление на сервере (столбец <code>deletedAt</code>), общая серверная корзина; чат и файлы удалять только при очистке корзины.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/app.js:3093, 3136 · js/sync.js:296–301 · gas/Code.gs:553</dd>
+          </dl>
+          <p class="note">Каскадное удаление переписки я добавил вместе с чатом в прошлой правке, не связав его с локальной корзиной, — это моя недоработка.</p>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev crit">К5</span>
+        <div class="f-body">
+          <h3>Вход открыт всему интернету</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Адрес API лежит в публичном репозитории, а любой новый логин регистрируется автоматически. Попытки входа не ограничены, пароли хешируются SHA-256 без соли, а список пользователей отдаёт каждому логины всех остальных.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Посторонний создаёт аккаунт, видит логины и подбирает пароли без ограничений. Может забивать таблицу и Диск: файлы по 10 МБ, квот нет. При утечке таблицы простые пароли вскрываются по готовым таблицам хешей.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Регистрация только по приглашению (список разрешённых логинов или создание аккаунтов админом); лимит попыток входа — 5 за 15 минут через CacheService; соль и многократное хеширование; не отдавать логины не-админам.</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:96, 174, 224, 243 · js/auth.js:13</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="high">
+    <div class="group">
+      <div class="group-title"><h2>Высокий приоритет</h2><span class="cnt">10 · скорость и стабильность</span></div>
+
+      <article class="finding">
+        <span class="sev high">В1</span>
+        <div class="f-body">
+          <h3>Фоновый опрос закрывает открытую задачу — это и есть «откат страницы»</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Когда опрос сервера (раз в 25 секунд) приносит любое изменение, приложение целиком заменяет состояние: закрывает панель задачи, сбрасывает историю Ctrl+Z и всё перерисовывает. Изменение не обязательно чужое — сервер помечает «изменено» и вашу собственную правку в чужой задаче.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Задача закрывается посреди чтения, набранное в чате сообщение пропадает, Ctrl+Z перестаёт работать. Это то самое «страница откатывается назад», о котором вы писали, — тогда я ошибочно списал это на нормальную работу опроса.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Не заменять, а вливать пришедшие изменения в текущее состояние; открытую задачу оставлять открытой, если её не удалили; не трогать Ctrl+Z и черновик сообщения.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/app.js:369–412 (replaceState, applyExternalState)</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В2</span>
+        <div class="f-body">
+          <h3>Живое обновление замерзает до перезагрузки страницы</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Защита в синхронизации пропускает цикл опроса, если с сервера пришло меньше задач, чем на экране.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Стоит кому-то удалить видимую вам задачу или убрать вас из участников — и опрос больше не применится ни разу: новые задачи и правки коллег перестают приходить, пока вы не обновите страницу.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Отличать «моё ещё не отправлено» (по очереди отправки) от «удалено на сервере» и применять удаления.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:188–195</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В3</span>
+        <div class="f-body">
+          <h3>Гонка между отправкой и опросом</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Флаг «идёт отправка» снимается в конце одной отправки, даже если следующая уже запланирована; две отправки могут идти параллельно и слать одно и то же.</dd>
+            <dt>Чем грозит</dt>
+            <dd>В этом окне опрос может откатить на экране только что сделанную правку — значение «мигает»; лишние запросы удлиняют очередь на сервере.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Одна очередь отправки вместо параллельных и счётчик ожидающих изменений вместо флага.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:249–268</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В4</span>
+        <div class="f-body">
+          <h3>Открытие приложения ждёт сервер дважды подряд</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>При запуске сначала проверяется сессия, затем загружаются задачи и пользователи — два последовательных похода примерно по 2 секунды. Всё это время виден только «Загружаем ваши задачи…», хотя данные с прошлого раза уже лежат в браузере.</dd>
+            <dt>Чем грозит</dt>
+            <dd>4–8 секунд на каждое открытие, а когда Google подвисает — десятки секунд (см. замер ниже).</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Сразу показывать приложение из кэша, а сессию и свежие данные проверять в фоне — сессию внутри той же загрузки задач, без отдельного запроса. Самый заметный выигрыш в скорости из всех.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/auth.js:212–231, 330–348 · js/sync.js:134</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В5</span>
+        <div class="f-body">
+          <h3>Массовые изменения — по запросу на каждую задачу</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Каждая изменённая задача уходит отдельным запросом, по 4 параллельно, и каждый ждёт общую блокировку записи.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Перетаскивание, которое пересчитывает порядок 30 задач, — это 30 запросов и 15–20 секунд очереди; импорт сотен задач — минуты. Правки коллег всё это время ждут ту же блокировку и могут отвалиться по таймауту (см. К2).</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Пакетный запрос: одна блокировка, одно чтение листа, одна запись.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:274–333</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В6</span>
+        <div class="f-body">
+          <h3>Опрос тянет всё и у всех</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Каждые 25 секунд каждое открытое окно запрашивает всё состояние (сервер читает 6 листов) и список всех пользователей.</dd>
+            <dt>Чем грозит</dt>
+            <dd>10 открытых вкладок — около 48 запусков скрипта в минуту. У Google лимит — около 30 одновременных запусков на владельца скрипта; дальше ошибки и замедления у всех.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Хранить номер ревизии в CacheService и спрашивать дешёвое «что-то изменилось?»; тянуть только изменения с прошлого раза; пользователей — раз в несколько минут.</dd>
+            <dt>Где</dt>
+            <dd class="ref">js/sync.js:18, 168–205</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В7</span>
+        <div class="f-body">
+          <h3>Лист сессий растёт вечно, а каждый запрос читает его целиком</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Каждый вход добавляет строку в Sessions, выход из аккаунта её не удаляет (чистится только браузер), просроченные сессии не удаляются, а проверка сессии на каждом запросе читает весь лист. Сброс пароля админом старые сессии не отзывает.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Со временем каждый запрос медленнее. Украденный токен работает 30 дней даже после выхода и смены пароля.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Выход удаляет сессию на сервере; сброс пароля удаляет все сессии пользователя; ежедневная чистка по триггеру; кэш сессий в CacheService.</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:197, 250, 276 · js/auth.js:313–319</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В8</span>
+        <div class="f-body">
+          <h3>Просто открыть задачу — это запись под общей блокировкой</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Отметка «просмотрено» стоит в списке действий, которые берут общую блокировку, и отправляется при открытии задачи с бейджем.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Открытие задач встаёт в одну очередь с сохранениями всех пользователей.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Убрать её из блокировки: лишняя строка просмотра безвредна, берётся самое позднее время.</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:115, 622</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В9</span>
+        <div class="f-body">
+          <h3>Задачу можно создать или перенести в чужой проект</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>При создании задачи и смене её проекта сервер не проверяет, есть ли у пользователя доступ к целевому проекту.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Прямым запросом можно подбросить задачи в любой проект, если известен его id.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Требовать, чтобы пользователь был автором или участником целевого проекта.</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:508–529</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev high">В10</span>
+        <div class="f-body">
+          <h3>Нет тестового сервера, выкладка — копипастой</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Локальная версия и боевой сайт ходят в одну таблицу; Code.gs переносится в редактор Apps Script руками.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Любая проверка пишет в боевые данные — отсюда история с тестовыми diag-аккаунтами. Легко забыть передеплоить или вставить не ту версию.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Вторая таблица и второй деплой для тестов, выбор по адресу (localhost — тестовый); выкладка Code.gs через clasp одной командой.</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="speed">
+    <div class="sec-head">
+      <h2>Замер скорости сервера</h2>
+      <p>10 запросов к боевому адресу Apps Script, которые не читают и не пишут таблицу: 5 GET и 5 POST без токена. Это чистая задержка платформы — любой реальный запрос ещё и читает листы, то есть медленнее.</p>
+    </div>
+    <figure class="chart-box" style="margin:0">
+      <div class="chart-scroll">
+        <svg viewBox="0 0 680 170" role="img" aria-labelledby="latTitle latDesc">
+          <title id="latTitle">Задержка запроса к Apps Script, секунды</title>
+          <desc id="latDesc">GET: 2,22; 2,57; 3,19; 2,01 и выброс 82,12 с. POST: 1,95; 2,13; 1,69; 3,43; 1,80. Медиана около 2,2 с.</desc>
+          <line class="grid" x1="207.5" y1="24" x2="207.5" y2="126"/>
+          <line class="grid" x1="325" y1="24" x2="325" y2="126"/>
+          <line class="grid" x1="442.5" y1="24" x2="442.5" y2="126"/>
+          <line class="grid" x1="560" y1="24" x2="560" y2="126"/>
+          <line class="ax" x1="90" y1="126" x2="570" y2="126"/>
+          <line class="ax" x1="90" y1="24" x2="90" y2="126"/>
+          <text class="t-dim" x="90" y="146" text-anchor="middle">0</text>
+          <text class="t-dim" x="207.5" y="146" text-anchor="middle">1</text>
+          <text class="t-dim" x="325" y="146" text-anchor="middle">2</text>
+          <text class="t-dim" x="442.5" y="146" text-anchor="middle">3</text>
+          <text class="t-dim" x="560" y="146" text-anchor="middle">4 с</text>
+          <line class="med-line" x1="345.6" y1="30" x2="345.6" y2="120"/>
+          <text class="t-dim" x="345.6" y="18" text-anchor="middle">медиана ≈ 2,2 с</text>
+          <text class="t-ink" x="78" y="59" text-anchor="end">GET</text>
+          <text class="t-ink" x="78" y="99" text-anchor="end">POST</text>
+          <circle class="dot" cx="350.9" cy="55" r="5"><title>GET: 2,22 с</title></circle>
+          <circle class="dot" cx="391.9" cy="55" r="5"><title>GET: 2,57 с</title></circle>
+          <circle class="dot" cx="464.8" cy="55" r="5"><title>GET: 3,19 с</title></circle>
+          <circle class="dot" cx="326.2" cy="55" r="5"><title>GET: 2,01 с</title></circle>
+          <circle class="dot" cx="319.1" cy="95" r="5"><title>POST: 1,95 с</title></circle>
+          <circle class="dot" cx="340.3" cy="95" r="5"><title>POST: 2,13 с</title></circle>
+          <circle class="dot" cx="288.6" cy="95" r="5"><title>POST: 1,69 с</title></circle>
+          <circle class="dot" cx="493" cy="95" r="5"><title>POST: 3,43 с</title></circle>
+          <circle class="dot" cx="301.5" cy="95" r="5"><title>POST: 1,80 с</title></circle>
+          <path class="ax" d="M578 120 l6 -12 M586 120 l6 -12" fill="none"/>
+          <circle class="dot-out" cx="630" cy="55" r="6"><title>GET: 82,12 с — зависание</title></circle>
+          <text class="t-crit" x="630" y="38" text-anchor="middle">82,1 с</text>
+          <text class="t-dim" x="630" y="80" text-anchor="middle">за шкалой</text>
+        </svg>
+      </div>
+      <figcaption class="cap">Разброс 1,7–3,4 секунды на «пустом» запросе и одно зависание на 82 секунды. Это потолок скорости текущего сервера: оптимизация кода его не снимает. Быстрым задачник станет только если интерфейс перестанет ждать сервер (В1, В4, В5) — или если сменить сервер (см. <a href="#backend">решение по серверу</a>).</figcaption>
+      <p class="num-list">GET: 2.22 · 82.12 · 2.57 · 3.19 · 2.01 с &nbsp;|&nbsp; POST: 1.95 · 2.13 · 1.69 · 3.43 · 1.80 с</p>
+    </figure>
+  </section>
+
+  <section id="medium">
+    <div class="group">
+      <div class="group-title"><h2>Средний приоритет</h2><span class="cnt">7</span></div>
+
+      <article class="finding">
+        <span class="sev med">С1</span>
+        <div class="f-body">
+          <h3>Даты могут приходить из таблицы в неверном формате — надо проверить</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Сервер пишет даты строками вида «2026-09-23», не задавая столбцам текстовый формат, а Google Таблица умеет превращать такие строки в даты. Тогда клиент получит «2026-09-22T21:00:00.000Z» и не сможет её разобрать.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Вероятная причина прошлого бага с пропавшей шапкой Ганта; дата может съезжать на день.</dd>
+            <dt>Проверка</dt>
+            <dd>Откройте лист Tasks и кликните в ячейку startDate. Если значение прижато вправо и в строке формул выглядит как дата — проблема есть.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">В <code>setup()</code> задать столбцам дат формат «обычный текст»; при чтении превращать объекты Date обратно в «ГГГГ-ММ-ДД».</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:739 (readRows) · js/utils.js:27 (strToDate)</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С2</span>
+        <div class="f-body">
+          <h3>«Изменено» висит после ваших же правок</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Сервер помечает задачу изменённой, если её правили после вашего последнего просмотра, — но не знает, кто правил.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Бейджи шумят и заодно запускают В1.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Столбец <code>updatedBy</code>; свои изменения не помечать.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С3</span>
+        <div class="f-body">
+          <h3>Файлы открываются любым, у кого есть ссылка, и квот нет</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Папка вложений открыта «всем, у кого есть ссылка»; ограничение — только 10 МБ на файл.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Пересланная ссылка открывает файл без входа. Один пользователь может заполнить Диск — 15 ГБ на бесплатном аккаунте, общие с почтой.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Для чувствительных файлов — отдача через сервер с проверкой сессии; квота на пользователя или проект.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С4</span>
+        <div class="f-body">
+          <h3>Клиент начнёт тормозить на 1–2 тысячах задач</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Каждое изменение перерисовывает текущий вид целиком; для Ctrl+Z при каждом сохранении копируется всё состояние (до 50 копий в памяти); при записи заново читается и разбирается весь сохранённый JSON; Гант рисует все строки сразу.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Сейчас незаметно; на большой базе — задержки при перетаскивании и вводе.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Точечные перерисовки; Ctrl+Z как список изменений, а не снимков; виртуализация длинных списков и Ганта.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С5</span>
+        <div class="f-body">
+          <h3>Не видно, сохранилось ли</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Ошибки синхронизации пишутся только в консоль браузера.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Статус в шапке: «Сохранено», «Сохраняется…», «Нет связи — повторим». Он есть во всех трёх эталонах и снимает половину тревоги у пользователей.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С6</span>
+        <div class="f-body">
+          <h3>Тесты не покрывают сеть и сервер</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>44 теста проверяют логику интерфейса; синхронизация, вход, админка, серверный код и чат не покрыты. CI нет — тесты запускаются только вручную.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Тесты синхронизации с подменённым сервером — именно они ловят К2, В2, В3. GitHub Actions: тесты и линтер на каждый push.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="finding">
+        <span class="sev med">С7</span>
+        <div class="f-body">
+          <h3>Каскадное удаление — по одной строке за вызов</h3>
+          <dl>
+            <dt>Что происходит</dt>
+            <dd>Удаление вызывает отдельную операцию с таблицей на каждую строку.</dd>
+            <dt>Чем грозит</dt>
+            <dd>Удаление большого проекта — сотни операций, возможен обрыв по лимиту 6 минут на запуск.</dd>
+            <dt>Как чинить</dt>
+            <dd class="fix">Перезаписывать оставшиеся строки одной записью или перейти на мягкое удаление (К4).</dd>
+            <dt>Где</dt>
+            <dd class="ref">gas/Code.gs:783</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="low">
+    <div class="group">
+      <div class="group-title"><h2>Мелочи</h2><span class="cnt">4</span></div>
+      <ul class="short">
+        <li><span class="sev low">Н1</span><span><b>Линтер: 2 предупреждения.</b> Неиспользуемые <code>commentSendBtn</code> и <code>escapeHtml</code>. <span class="ref">js/app.js:734 · js/auth.js:10</span></span></li>
+        <li><span class="sev low">Н2</span><span><b>Админка на системных окнах браузера.</b> alert / prompt / confirm вместо окон приложения; новый пароль вводится в prompt открытым текстом. <span class="ref">js/admin.js:73–88</span></span></li>
+        <li><span class="sev low">Н3</span><span><b>Документация устарела.</b> README пустой, а <code>improvements.html</code> от 3 сентября пишет «0 тестов, только localStorage» и вводит в заблуждение.</span></li>
+        <li><span class="sev low">Н4</span><span><b>Токены сессий лежат в таблице открытым текстом.</b> Любой с доступом к таблице может войти под кем угодно. Хранить хеш токена.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="sec-head">
+      <h2>Функции против Asana, MS Project и Pyrus</h2>
+      <p>Приоритет — для вашей цели «быстрый рабочий задачник для команды». Самое ценное из недостающего — не Гант, а то, что делает задачник живым: личный список, лента событий, упоминания и уведомления.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Возможность</th><th>Сейчас</th><th>Приоритет</th></tr></thead>
+        <tbody>
+          <tr><td class="grp" colspan="3">Как в Asana</td></tr>
+          <tr><td>Доска, список, разделы, подзадачи, теги, поиск, Ctrl+K, архив</td><td><span class="chip yes">есть</span></td><td class="prio p3">—</td></tr>
+          <tr><td>Чат и файлы в задаче</td><td><span class="chip yes">есть</span></td><td class="prio p3">—</td></tr>
+          <tr><td>«Мои задачи»: личный список по всем проектам — сегодня, неделя, позже</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий</td></tr>
+          <tr><td>«Входящие»: лента событий — назначили, прокомментировали, сдвинули срок</td><td><span class="chip part">частично</span> бейджи «новое / изменено»</td><td class="prio p1">высокий</td></tr>
+          <tr><td>@упоминания в чате</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий</td></tr>
+          <tr><td>Уведомления вне приложения — почта или Telegram</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий</td></tr>
+          <tr><td>История изменений задачи</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Повторяющиеся задачи</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Шаблоны проектов и задач</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Вид «Календарь»</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Пользовательские поля</td><td><span class="chip no">нет</span></td><td class="prio p3">низкий</td></tr>
+
+          <tr><td class="grp" colspan="3">Как в MS Project</td></tr>
+          <tr><td>Иерархический Гант, авторасчёт сроков по подзадачам</td><td><span class="chip yes">есть</span></td><td class="prio p3">—</td></tr>
+          <tr><td>Загрузка людей по часам, конфликты занятости</td><td><span class="chip yes">есть</span></td><td class="prio p3">—</td></tr>
+          <tr><td>Зависимости «сначала выполнить»</td><td><span class="chip part">частично</span> только значок ⛔</td><td class="prio p3">—</td></tr>
+          <tr><td>Перетаскивание и растягивание полос на Ганте</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий</td></tr>
+          <tr><td>Стрелки связей на Ганте</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий</td></tr>
+          <tr><td>Автосдвиг последователей, типы связей и лаги</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Вехи</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Критический путь</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Учёт фактических трудозатрат</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Базовый план: план против факта</td><td><span class="chip no">нет</span></td><td class="prio p3">низкий</td></tr>
+          <tr><td>Рабочий календарь — выходные и праздники в длительности</td><td><span class="chip no">нет</span></td><td class="prio p3">низкий</td></tr>
+
+          <tr><td class="grp" colspan="3">Как в Pyrus</td></tr>
+          <tr><td>Маршруты согласования: этапы, «Согласовать / Отклонить»</td><td><span class="chip no">нет</span></td><td class="prio p1">высокий, если в команде есть согласования</td></tr>
+          <tr><td>Системные события в ленте задачи — «Иван сдвинул срок»</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Формы заявок</td><td><span class="chip no">нет</span></td><td class="prio p2">средний</td></tr>
+          <tr><td>Телефон: установка на экран и пуш-уведомления</td><td><span class="chip part">частично</span> адаптивная вёрстка</td><td class="prio p2">средний</td></tr>
+          <tr><td>Роли в проекте шире «автор / участник / админ»</td><td><span class="chip part">частично</span></td><td class="prio p3">низкий</td></tr>
+          <tr><td>SLA и эскалация просрочек</td><td><span class="chip no">нет</span></td><td class="prio p3">низкий</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="backend">
+    <div class="sec-head">
+      <h2>Решение по серверу</h2>
+      <p>Главный вопрос перед большими вложениями. Часть серверных оптимизаций из плана (пакетная запись, дешёвый опрос) имеет смысл только если остаёмся на Apps Script — при переезде они выбрасываются.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table class="opts">
+        <thead><tr><th></th><th>Apps Script + Таблица (сейчас)</th><th>Supabase (облако)</th><th>PocketBase на своём сервере</th></tr></thead>
+        <tbody>
+          <tr><td>Задержка запроса</td><td>1,7–3,4 с, бывают зависания — замерено 82 с</td><td>обычно десятки–сотни миллисекунд</td><td>обычно десятки миллисекунд</td></tr>
+          <tr><td>Изменения коллег</td><td>опрос раз в 25 секунд</td><td>мгновенно, подписки</td><td>мгновенно, подписки</td></tr>
+          <tr><td>Вход и пароли</td><td>самописные (см. К5)</td><td>готовые, со сбросом по почте</td><td>готовые</td></tr>
+          <tr><td>Файлы</td><td>Drive, доступ по ссылке</td><td>хранилище с правами</td><td>хранилище с правами</td></tr>
+          <tr><td>Данные видно в Google Таблице</td><td>да</td><td>нет, можно выгружать</td><td>нет, можно выгружать</td></tr>
+          <tr><td>Стоимость</td><td>бесплатно</td><td>бесплатный тариф для небольшой команды</td><td>цена небольшого VPS</td></tr>
+          <tr><td>Что переписать</td><td>ничего</td><td>js/sync.js, js/auth.js, правила доступа</td><td>то же</td></tr>
+          <tr><td>Риски</td><td>квоты Google, общая блокировка записи</td><td>доступность зарубежного сервиса</td><td>сервер нужно обслуживать</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pick">
+      <div class="eyebrow">Рекомендация</div>
+      <p>Этап 0 делать сейчас в любом случае. Если в команде больше 5 человек или нужна совместная работа «вживую», как в Asana, — переезжать: на PocketBase, если есть кому поднять небольшой сервер (данные остаются у вас), на Supabase — если сервер обслуживать не хочется. Интерфейсные улучшения — мгновенный старт из кэша, не закрывать задачу при обновлении, статус сохранения — полезны при любом выборе.</p>
+    </div>
+  </section>
+
+  <section id="plan">
+    <div class="sec-head">
+      <h2>План работ</h2>
+      <p>Порядок важен: сначала то, что теряет данные, потом скорость, потом функции.</p>
+    </div>
+    <ol class="road">
+      <li><div class="st"><h3>Стоп-кран</h3><span class="when">1–2 дня</span><p><b>К1</b> проверка цвета и экранирование · <b>К2</b> не терять отказы сервера · <b>К5</b> регистрация по приглашению и лимит попыток · <b>В1</b> не закрывать задачу при обновлении · <b>В2</b> не замерзать · <b>В3</b> одна очередь отправки · <b>В7</b> выход удаляет сессию, чистка сессий · <b>Н1</b>.</p></div></li>
+      <li><div class="st"><h3>Решение по серверу</h3><span class="when">1 день на выбор</span><p>Остаёмся на Apps Script или переезжаем — от этого зависит, какие пункты этапа 2 делать на сервере.</p></div></li>
+      <li><div class="st"><h3>Скорость и надёжность</h3><span class="when">1–2 недели</span><p><b>В4</b> мгновенный старт из кэша · <b>К3</b> отправка только изменённых полей · <b>К4</b> серверная корзина · <b>В5</b> пакетное сохранение · <b>В6</b> дешёвый опрос · <b>В8</b> · <b>С5</b> статус сохранения · <b>В10</b> тестовый сервер и clasp · <b>С6</b> тесты синхронизации и CI · <b>С1</b>, <b>С2</b>.</p></div></li>
+      <li><div class="st"><h3>Рабочий минимум Asana и Pyrus</h3><span class="when">2–3 недели</span><p><b>«Мои задачи»</b>, <b>«Входящие»</b> с историей изменений, <b>@упоминания</b>, <b>уведомления</b> в почту или Telegram, повторяющиеся задачи, шаблоны.</p></div></li>
+      <li><div class="st"><h3>Гант уровня MS Project</h3><span class="when">2–3 недели</span><p>Перетаскивание полос, стрелки связей, автосдвиг последователей, вехи, критический путь.</p></div></li>
+      <li><div class="st"><h3>Процессы как в Pyrus</h3><span class="when">по потребности</span><p>Маршруты согласования, формы заявок, SLA.</p></div></li>
+    </ol>
+  </section>
+
+  <footer id="method">
+    <div class="eyebrow">Как проверял</div>
+    <p>Прочитал весь код — 9 662 строки: js/app.js, sync.js, auth.js, admin.js, analytics.js, utils.js, gas/Code.gs, index.html, style.css. Прогнал 44 теста — все проходят; линтер — 0 ошибок, 2 предупреждения. Задержку сервера мерил 10 запросами, которые не трогают таблицу.</p>
+    <p>Не проверял: живой вход и работу в браузере под реальным аккаунтом (нет тестового сервера, а писать в боевую таблицу не хотелось), содержимое самой Google Таблицы и работу на телефоне. Номера строк — на коммит <code>240e162</code>.</p>
+  </footer>
+
+</div>

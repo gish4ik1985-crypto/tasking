@@ -7,10 +7,19 @@
 (function () {
   "use strict";
 
-  const { escapeHtml } = window.TaskingUtils;
-
   // Публичный URL Google Apps Script Web App (см. gas/Code.gs).
-  const API_URL = "https://script.google.com/macros/s/AKfycbxxbIRLKjIOItiPCc74hpXAxCSvMH-xHTjBSc8VpPz5v2elLYmE303C1kt4lIpRGSs/exec";
+  const PROD_API_URL = "https://script.google.com/macros/s/AKfycbxxbIRLKjIOItiPCc74hpXAxCSvMH-xHTjBSc8VpPz5v2elLYmE303C1kt4lIpRGSs/exec";
+  // Для разработки: localStorage["tasking-api-url"] = "http://localhost:8935"
+  // направляет приложение на локальный эмулятор (npm run dev:api) вместо
+  // боевой таблицы. Работает только для адресов localhost/127.0.0.1.
+  const API_URL = (function () {
+    try {
+      const custom = localStorage.getItem("tasking-api-url");
+      if (custom && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(custom)) return custom;
+    } catch (e) { /* нет доступа к localStorage — берём боевой адрес */ }
+    return PROD_API_URL;
+  })();
+  const STATE_KEY = "tasking-state-v1";
   const SESSION_KEY = "tasking-auth-v1";
 
   function loadSession() {
@@ -114,8 +123,16 @@
           <label class="profile-view-check"><input type="checkbox" value="tree"> По статусам</label>
           <label class="profile-view-check"><input type="checkbox" value="structure"> Структура</label>
           <label class="profile-view-check"><input type="checkbox" value="gantt"> Гант</label>
+          <label class="profile-view-check"><input type="checkbox" value="calendar"> Календарь</label>
         </div>
       </div>
+      <label class="auth-field">
+        <span>Почта для уведомлений</span>
+        <input type="email" id="profileEmail" placeholder="name@example.com" autocomplete="email">
+      </label>
+      <label class="profile-view-check">
+        <input type="checkbox" id="profileNotify"> Присылать письма: назначения, сообщения, упоминания, согласования
+      </label>
       <div class="auth-error" id="profileError" hidden></div>
       <button type="button" class="auth-submit" id="profileSaveBtn">Сохранить</button>
       <button type="button" class="profile-admin-btn" id="profileAdminBtn" hidden>⚙ Управление пользователями</button>
@@ -144,7 +161,9 @@
   const profileAdminBtn = document.getElementById("profileAdminBtn");
   const profileLogoutBtn = document.getElementById("profileLogoutBtn");
   const profileViewChecks = Array.from(document.querySelectorAll("#profileViewsList input[type=checkbox]"));
-  const ALL_VIEWS = ["board", "list", "tree", "structure", "gantt"];
+  const profileEmail = document.getElementById("profileEmail");
+  const profileNotify = document.getElementById("profileNotify");
+  const ALL_VIEWS = ["board", "list", "tree", "structure", "gantt", "calendar"];
 
   // Показывает/прячет кнопки-вкладки (Доска/Список/.../Гант) в шапке
   // проекта согласно выбору пользователя в профиле. app.js ничего не знает
@@ -197,6 +216,8 @@
     profileHours.value = user.weeklyHours != null ? user.weeklyHours : 40;
     const views = Array.isArray(user.visibleViews) && user.visibleViews.length ? user.visibleViews : ALL_VIEWS;
     profileViewChecks.forEach((cb) => { cb.checked = views.includes(cb.value); });
+    profileEmail.value = user.email || "";
+    profileNotify.checked = !!user.notifyEmail;
     applyViewVisibility(views);
     profileAdminBtn.hidden = !user.isAdmin;
   }
@@ -288,12 +309,19 @@
     profileSaveBtn.disabled = true;
     try {
       const res = await api("updateProfile", {
-        profile: { name: profileName.value.trim(), color: profileColor.value, weeklyHours: profileHours.value, visibleViews: checkedViews }
+        profile: {
+          name: profileName.value.trim(), color: profileColor.value, weeklyHours: profileHours.value, visibleViews: checkedViews,
+          email: profileEmail.value.trim(), notifyEmail: profileNotify.checked
+        }
       });
       if (!res.ok) {
         profileError.textContent = res.error || "Не удалось сохранить";
         profileError.hidden = false;
         return;
+      }
+      if (profileEmail.value.trim() && !res.user.email && res.user.email !== undefined) {
+        profileError.textContent = "Почта не сохранена — проверьте адрес.";
+        profileError.hidden = false;
       }
       const session = loadSession();
       session.user = res.user;
@@ -301,7 +329,7 @@
       profileBtn.textContent = (res.user.name || res.user.login || "?").slice(0, 1).toUpperCase();
       profileBtn.title = res.user.name || res.user.login;
       applyViewVisibility(res.user.visibleViews);
-      profilePanel.hidden = true;
+      if (profileError.hidden) profilePanel.hidden = true;
     } catch (err) {
       profileError.textContent = "Нет связи с сервером.";
       profileError.hidden = false;
@@ -310,7 +338,17 @@
     }
   });
 
-  profileLogoutBtn.addEventListener("click", () => {
+  // Выход: дожидаемся отправки несохранённого, отзываем сессию на сервере
+  // и стираем данные из браузера — на общем компьютере следующий человек
+  // не должен видеть чужие задачи.
+  profileLogoutBtn.addEventListener("click", async () => {
+    profileLogoutBtn.disabled = true;
+    profileLogoutBtn.textContent = "Выходим…";
+    try {
+      if (window.TaskingSync) await window.TaskingSync.flush(8000);
+      await Promise.race([api("logout", {}), new Promise((r) => setTimeout(r, 4000))]);
+    } catch (e) { /* нет связи — сессия всё равно истечёт сама */ }
+    try { localStorage.removeItem(STATE_KEY); } catch (e) { /* игнор */ }
     clearSession();
     // Перезагружаем страницу целиком — самый надёжный способ сбросить уже
     // выполнившийся app.js (его внутреннее состояние живёт в переменных
@@ -327,8 +365,47 @@
   authStatus.textContent = "Проверяем сессию...";
   authForm.hidden = true;
 
+  // Сервер сообщил, что сессия больше не действительна (истекла, отозвана
+  // сменой пароля) — возвращаем на экран входа.
+  window.addEventListener("tasking:auth-lost", () => {
+    clearSession();
+    location.reload();
+  });
+
+  // Мгновенный старт: если данные с прошлого раза лежат в браузере,
+  // показываем приложение сразу, а сессию и свежие данные проверяем в фоне
+  // (раньше каждое открытие ждало два похода на сервер — 4–8 секунд).
+  async function enterFromCache(session) {
+    try {
+      await loadAppScripts();
+    } catch (err) {
+      return false;
+    }
+    landing.hidden = true;
+    appRoot.hidden = false;
+    profileMenu.hidden = false;
+    updateProfileUi(session.user);
+    window.TaskingSync.startPolling();
+    window.TaskingSync.refreshNow();
+    api("whoAmI", {}).then((res) => {
+      if (res.ok) {
+        session.user = res.user;
+        saveSession(session);
+        updateProfileUi(res.user);
+      } else if (res.error === "unauthorized") {
+        clearSession();
+        location.reload();
+      }
+    }).catch(() => { /* нет связи — работаем с кэшем, опрос повторит */ });
+    return true;
+  }
+
+  // Запуск — когда загружены все скрипты страницы (sync.js идёт после auth.js).
+  function start() {
   const session = loadSession();
-  if (session && session.token) {
+  if (session && session.token && session.user && window.TaskingSync.initFromCache()) {
+    enterFromCache(session).then((ok) => { if (!ok) location.reload(); });
+  } else if (session && session.token) {
     // Есть сохранённый токен — проверяем, что он ещё действителен (мог
     // истечь через 30 дней или после пересоздания таблицы), и только
     // потом тянем задачи и открываем приложение.
@@ -349,4 +426,7 @@
   } else {
     showLanding();
   }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();

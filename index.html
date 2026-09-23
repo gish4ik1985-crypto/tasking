@@ -25,6 +25,12 @@
     <button class="nav-dashboard" id="dashboardNavBtn" title="Рабочий стол">
       <span class="nav-dashboard-icon">◧</span><span class="nav-label">Рабочий стол</span><span class="nav-trash-count nav-unread-count" id="unreadCount" hidden aria-live="polite"></span>
     </button>
+    <button class="nav-dashboard" id="myTasksNavBtn" title="Мои задачи — всё, что назначено на вас, по всем проектам">
+      <span class="nav-dashboard-icon">✔</span><span class="nav-label">Мои задачи</span><span class="nav-trash-count nav-unread-count" id="myOverdueCount" hidden title="Просрочено"></span>
+    </button>
+    <button class="nav-dashboard" id="inboxNavBtn" title="Входящие — назначения, сообщения, упоминания, согласования">
+      <span class="nav-dashboard-icon">✉</span><span class="nav-label">Входящие</span><span class="nav-trash-count nav-unread-count" id="inboxCount" hidden aria-live="polite"></span>
+    </button>
     <button class="nav-dashboard" id="peopleNavBtn" title="Люди">
       <span class="nav-dashboard-icon">☺</span><span class="nav-label">Люди</span>
     </button>
@@ -47,6 +53,7 @@
     <nav class="project-list" id="projectList"></nav>
 
     <div class="sidebar-bottom">
+      <button type="button" class="sync-status" id="syncStatus" hidden aria-live="polite"><span class="sync-dot"></span><span class="sync-text nav-label"></span></button>
       <label class="toggle-completed">
         <input type="checkbox" id="showCompletedToggle" checked>
         <span>Показывать выполненные</span>
@@ -110,6 +117,7 @@
             <button class="filter-reset-btn" id="filterResetBtn">Сбросить фильтры</button>
           </div>
         </div>
+        <button class="btn-filter" id="duplicateProjectBtn" title="Создать копию проекта со всеми разделами и задачами — как шаблон">⧉ Копия</button>
         <button class="btn-filter" id="archiveCompletedBtn" title="Убрать все выполненные задачи этого проекта из обычных видов в архив">🗄 В архив</button>
         <div class="filter-box">
           <button class="btn-filter" id="membersToggleBtn" title="Участники проекта — видят все задачи проекта">👥 Участники</button>
@@ -124,6 +132,7 @@
           <button class="view-btn" data-view="tree">По статусам</button>
           <button class="view-btn" data-view="structure">Структура</button>
           <button class="view-btn" data-view="gantt">Гант</button>
+          <button class="view-btn" data-view="calendar">Календарь</button>
         </div>
         <button class="btn-delete-project" id="deleteProjectBtn" title="Удалить проект" aria-label="Удалить проект">🗑</button>
       </div>
@@ -150,6 +159,11 @@
       </div>
     </div>
 
+    <!-- вид "Календарь" — задачи по срокам на сетке месяца -->
+    <div class="calendar-wrap" id="calendarWrap" hidden>
+      <div class="calendar" id="calendar"></div>
+    </div>
+
     <!-- вид "Гант" -->
     <div class="gantt-wrap" id="ganttWrap" hidden>
       <div class="gantt-toolbar">
@@ -161,6 +175,9 @@
         <input type="range" id="ganttZoomSlider" min="6" max="60" step="2" aria-label="Масштаб диаграммы Ганта">
         <button class="gantt-zoom-btn" id="ganttZoomInBtn" title="Увеличить масштаб" aria-label="Увеличить масштаб">+</button>
         <span class="gantt-zoom-value" id="ganttZoomValue"></span>
+        <span class="gantt-toolbar-sep"></span>
+        <label class="gantt-toggle"><input type="checkbox" id="ganttLinksToggle" checked> Связи</label>
+        <label class="gantt-toggle"><input type="checkbox" id="ganttCriticalToggle"> Критический путь</label>
       </div>
       <div class="gantt-scroll">
         <div class="gantt" id="gantt"></div>
@@ -170,6 +187,16 @@
     <!-- экран "Дашборд" (не привязан к одному проекту) -->
     <div class="dashboard-wrap" id="dashboardWrap" hidden>
       <div class="dashboard" id="dashboard"></div>
+    </div>
+
+ <!-- экран "Мои задачи" — назначенное на меня по всем проектам -->
+    <div class="dashboard-wrap" id="myTasksWrap" hidden>
+      <div class="dashboard" id="myTasks"></div>
+    </div>
+
+    <!-- экран "Входящие" — лента событий -->
+    <div class="dashboard-wrap" id="inboxWrap" hidden>
+      <div class="dashboard" id="inbox"></div>
     </div>
 
     <!-- экран "Люди" — справочник исполнителей (тоже не привязан к проекту) -->
@@ -266,6 +293,22 @@
               <div class="watchers-chips" id="detailWatchers"></div>
             </div>
 
+            <!-- Согласование как в Pyrus: автор задачи выбирает согласующих,
+                 каждый из них ставит «Согласовать» или «Отклонить» -->
+            <div class="detail-field detail-approvals" id="detailApprovalsField" hidden>
+              <label>Согласование <span class="approval-status" id="approvalStatus"></span></label>
+              <select id="detailApproversAdd"><option value="">+ Добавить согласующего…</option></select>
+              <div class="approvals-list" id="approvalsList"></div>
+              <div class="approval-actions" id="approvalActions" hidden>
+                <input type="text" id="approvalComment" placeholder="Комментарий к решению (необязательно)">
+                <div class="approval-buttons">
+                  <button type="button" class="approve-btn" id="approveBtn">Согласовать</button>
+                  <button type="button" class="reject-btn" id="rejectBtn">Отклонить</button>
+                </div>
+              </div>
+              <button type="button" class="link-btn" id="resetApprovalsBtn" hidden>Запросить согласование заново</button>
+            </div>
+
             <!-- Предупреждение, что у исполнителя в эти же даты уже есть
                  другая незавершённая задача -->
             <div class="conflict-warning" id="conflictWarning" hidden></div>
@@ -304,6 +347,22 @@
               <label>Оценка, ч</label>
               <input type="number" id="detailEstimate" min="0" step="0.5" placeholder="напр. 4">
             </div>
+
+            <div class="detail-field" id="detailRecurrenceField">
+              <label for="detailRecurrence">Повторять</label>
+              <select id="detailRecurrence">
+                <option value="">Не повторять</option>
+                <option value="daily">Каждый день</option>
+                <option value="weekdays">По будням</option>
+                <option value="weekly">Каждую неделю</option>
+                <option value="monthly">Каждый месяц</option>
+              </select>
+            </div>
+
+            <label class="detail-check" id="detailMilestoneField">
+              <input type="checkbox" id="detailMilestone">
+              <span>Веха — ключевая точка проекта (ромб на Ганте)</span>
+            </label>
 
             <div class="detail-field">
               <label>Теги</label>

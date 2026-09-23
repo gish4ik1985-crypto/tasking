@@ -39,7 +39,7 @@ export default [
   {
     // Тесты и их хелперы: Node + Vitest, обычные ES-модули (это только
     // для разработки, никак не грузится в браузере пользователя).
-    files: ["test/**/*.js"],
+    files: ["test/**/*.js", "dev/**/*.js", "dev/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

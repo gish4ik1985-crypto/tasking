@@ -97,6 +97,49 @@ export async function loadApp({ seedState, rawLocalStorage, protocol = "http" } 
   return { dom, jsErrors };
 }
 
+// Полное приложение как у пользователя — с auth.js/sync.js/admin.js — но
+// сервер вместо Google Apps Script — эмулятор (dev/gas-emulator.js): fetch
+// страницы уходит прямо в doPost() настоящего gas/Code.gs. session —
+// объект сессии, который кладётся в localStorage (вход без формы).
+// failActions — действия, на которые "сервер" отвечает unknown action
+// (так имитируется старая версия сервера).
+export async function loadAppWithServer({ gas, session, cachedState, failActions = [], hash = "" }) {
+  const indexPath = path.join(ROOT, "index.html");
+  const html = readFileSync(indexPath, "utf-8");
+  const jsErrors = [];
+  const calls = [];
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.forwardTo(console, { omitJSDOMErrors: true });
+  virtualConsole.on("jsdomError", (e) => jsErrors.push(e));
+  const dom = new JSDOM(html, {
+    url: "http://localhost/" + hash,
+    runScripts: "dangerously",
+    resources: { interceptors: [localFileInterceptor] },
+    pretendToBeVisual: true,
+    virtualConsole,
+    beforeParse(window) {
+      window.localStorage.setItem("tasking-auth-v1", JSON.stringify(session));
+      if (cachedState) window.localStorage.setItem("tasking-state-v1", JSON.stringify(cachedState));
+      window.fetch = async (_url, opts) => {
+        const body = JSON.parse(opts.body);
+        calls.push(body.action);
+        const out = failActions.includes(body.action)
+          ? JSON.stringify({ ok: false, error: "unknown action" })
+          : gas.context.doPost({ postData: { contents: opts.body } }).getContent();
+        return { json: async () => JSON.parse(out) };
+      };
+    }
+  });
+  await new Promise((resolve, reject) => {
+    dom.window.addEventListener("load", resolve);
+    setTimeout(() => reject(new Error("Страница не загрузилась за 5 секунд")), 5000);
+  });
+  // Ждём, пока auth.js подгрузит app.js и приложение появится.
+  const until = Date.now() + 5000;
+  while (!dom.window.TaskingApplyExternalState && Date.now() < until) await tick(50);
+  return { dom, jsErrors, calls };
+}
+
 // Небольшая пауза — на debounce внутри save()/поиска и на завершение
 // текущей очереди микрозадач/таймеров после клика или ввода.
 export function tick(ms = 450) {

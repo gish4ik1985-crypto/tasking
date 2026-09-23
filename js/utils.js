@@ -49,5 +49,13 @@
     }[c]));
   }
 
-  window.TaskingUtils = { dateToStr, strToDate, todayStr, addDays, escapeHtml };
+  // Цвет для вставки в style="..." — только #rgb / #rrggbb, иначе запасной.
+  // Цвета приходят с сервера (профили, проекты), и без этой проверки строка
+  // вида '#fff" onmouseover="…' выполнилась бы как код в чужом браузере.
+  function safeColor(value, fallback) {
+    const s = String(value == null ? "" : value).trim();
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : (fallback || "#6d5dfc");
+  }
+
+  window.TaskingUtils = { dateToStr, strToDate, todayStr, addDays, escapeHtml, safeColor };
 })();
