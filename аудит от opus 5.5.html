@@ -187,6 +187,13 @@ footer p { max-width: 72ch; }
   .road li { grid-template-columns: 30px 1fr; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.done-box { background: var(--surface); border: 1px solid var(--yes); border-radius: 14px; padding: 22px 24px; }
+.done-box p { max-width: 70ch; color: var(--dim); }
+.status { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.status li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: baseline; font-size: 14.5px; color: var(--dim); }
+.status li b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+@media (max-width: 560px) { .status li { grid-template-columns: 1fr; gap: 4px; } }
 </style>
 
 <div class="page">
@@ -211,6 +218,7 @@ footer p { max-width: 72ch; }
     </div>
 
     <nav class="toc" aria-label="Содержание">
+      <a href="#done">Что сделано</a>
       <a href="#good">Что уже хорошо</a>
       <a href="#critical">Критично</a>
       <a href="#high">Высокий приоритет</a>
@@ -223,6 +231,26 @@ footer p { max-width: 72ch; }
       <a href="#method">Как проверял</a>
     </nav>
   </header>
+
+    <section id="done" class="done-box">
+      <div class="eyebrow">Обновлено 23 сентября 2026 · после доработки</div>
+      <h2>Что сделано</h2>
+      <p>По итогам аудита исправлены все критичные и высокоприоритетные пункты, кроме двух решений, которые остаются за вами (сервер и тестовая таблица), и добавлен рабочий минимум Asana, Project и Pyrus. Тестов стало 77 вместо 44: серверная логика и синхронизация проверяются на эмуляторе Apps Script, и отдельный тест гоняет новый клиент против старой версии сервера.</p>
+      <ul class="status">
+        <li><span class="chip yes">сделано</span><b>К1–К5</b> XSS через цвет, молчаливая потеря правок, затирание чужих правок, серверная корзина с сохранением чата, соль в паролях, лимит попыток входа, закрываемая регистрация, логины скрыты</li>
+        <li><span class="chip yes">сделано</span><b>В1–В9</b> задача не закрывается при обновлении, опрос не «замерзает», одна очередь отправки, мгновенный старт из кэша, пакетное сохранение, дешёвый опрос по ревизии, сессии отзываются при выходе и смене пароля, markViewed без блокировки, проверка доступа к проекту</li>
+        <li><span class="chip part">частично</span><b>В10</b> локальный сервер-эмулятор (<code>npm run dev:api</code>) и манифест для clasp готовы; вторую Google Таблицу для тестов и <code>clasp login</code> нужно сделать вам</li>
+        <li><span class="chip yes">сделано</span><b>С1, С2, С5, С6, С7</b> даты всегда ГГГГ-ММ-ДД, «изменено» не от своих правок, индикатор сохранения, тесты синхронизации и CI в GitHub Actions, быстрое удаление строк</li>
+        <li><span class="chip no">не сделано</span><b>С3</b> файлы по-прежнему открываются по ссылке без входа; квот нет</li>
+        <li><span class="chip no">не сделано</span><b>С4</b> производительность на 1–2 тысячах задач — отложено: сейчас не мешает, а переделка большая</li>
+        <li><span class="chip yes">сделано</span><b>Н1–Н4</b> линтер чистый, админка без системных окон, README, токены сессий хешем</li>
+        <li><span class="chip yes">сделано</span><b>Asana</b> «Мои задачи», «Входящие», история задачи в ленте, @упоминания, письма на почту, повторяющиеся задачи, копия проекта как шаблон, календарь, ссылки на задачу</li>
+        <li><span class="chip yes">сделано</span><b>MS Project</b> перетаскивание и растягивание полос, стрелки связей, автосдвиг зависимых задач, вехи, критический путь</li>
+        <li><span class="chip part">частично</span><b>Pyrus</b> согласования есть; формы заявок и SLA — нет</li>
+        <li><span class="chip no">за вами</span><b>Сервер</b> остались на Apps Script; переезд на Supabase или PocketBase — отдельное решение, для него нужны ваши аккаунты</li>
+      </ul>
+      <p class="note">Чтобы всё заработало, перезалейте <code>gas/Code.gs</code>, один раз запустите <code>setup</code> (Google спросит разрешения на Диск и Почту) и сделайте новый деплой. До этого сайт продолжит работать со старым сервером, просто без новых функций сервера.</p>
+    </section>
 
   <section id="good">
     <div class="sec-head">

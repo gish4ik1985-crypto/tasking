@@ -34,8 +34,19 @@
     try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch (e) { /* старые браузеры */ }
   }
 
+  let featuresKnown = false;
+
   function applyServerMeta(res) {
-    if (Array.isArray(res.features)) features = new Set(res.features);
+    if (Array.isArray(res.features)) {
+      const first = !featuresKnown;
+      features = new Set(res.features);
+      featuresKnown = true;
+      if (first) emit("tasking:features", {});
+    } else if (res.projects && !featuresKnown) {
+      // Старый сервер: полный ответ без списка возможностей.
+      featuresKnown = true;
+      emit("tasking:features", {});
+    }
     if (res.revision) revision = res.revision;
     if (typeof res.inboxUnread === "number") emit("tasking:inbox", { unread: res.inboxUnread });
   }
@@ -617,6 +628,7 @@
   window.TaskingSync = {
     pull, push, flush, markViewed, purgeTasks, resetSnapshot, startPolling, initFromCache,
     refreshNow: () => pollOnce(true), retryNow, hasPendingChanges, getStatus: () => status, has,
+    featuresKnown: () => featuresKnown,
     getComments, saveComment, deleteComment, getInbox, markInboxRead, decideApproval, resetApprovals,
     // Для тестов.
     _contentSignature: contentSignature

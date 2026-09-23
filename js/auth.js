@@ -345,7 +345,7 @@
     profileLogoutBtn.disabled = true;
     profileLogoutBtn.textContent = "Выходим…";
     try {
-      if (window.TaskingSync) await window.TaskingSync.flush(8000);
+      if (window.TaskingSync && window.TaskingSync.flush) await window.TaskingSync.flush(8000);
       await Promise.race([api("logout", {}), new Promise((r) => setTimeout(r, 4000))]);
     } catch (e) { /* нет связи — сессия всё равно истечёт сама */ }
     try { localStorage.removeItem(STATE_KEY); } catch (e) { /* игнор */ }
@@ -403,7 +403,7 @@
   // Запуск — когда загружены все скрипты страницы (sync.js идёт после auth.js).
   function start() {
   const session = loadSession();
-  if (session && session.token && session.user && window.TaskingSync.initFromCache()) {
+  if (session && session.token && session.user && typeof window.TaskingSync.initFromCache === "function" && window.TaskingSync.initFromCache()) {
     enterFromCache(session).then((ok) => { if (!ok) location.reload(); });
   } else if (session && session.token) {
     // Есть сохранённый токен — проверяем, что он ещё действителен (мог

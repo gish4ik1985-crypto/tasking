@@ -3473,7 +3473,7 @@
   // Удалённые задачи сервер хранит ещё 60 дней (чтобы восстановление
   // вернуло и переписку). Окончательное удаление из корзины стирает их и там.
   function purgeOnServer(entries) {
-    if (!window.TaskingSync || !entries.length) return;
+    if (!window.TaskingSync || typeof window.TaskingSync.purgeTasks !== "function" || !entries.length) return;
     const ids = [];
     entries.forEach((e) => (e.tasks || []).forEach((t) => ids.push(t.id)));
     window.TaskingSync.purgeTasks(ids);
@@ -3856,7 +3856,13 @@
   // Умеет ли сервер эту функцию. Без синхронизации (локальный режим, тесты)
   // всё доступно — данные просто лежат в браузере.
   function serverSupports(feature) {
-    return !window.TaskingSync || window.TaskingSync.has(feature);
+    return !window.TaskingSync || syncHas(feature);
+  }
+
+  // Старый закэшированный браузером sync.js (первые минуты после обновления
+  // сайта) может не знать новых функций — тогда считаем их недоступными.
+  function syncHas(feature) {
+    return !!window.TaskingSync && typeof window.TaskingSync.has === "function" && window.TaskingSync.has(feature);
   }
 
   function myUserId() {
@@ -3878,7 +3884,7 @@
 
   function renderApprovals(task) {
     // Решения ставятся только через сервер — без него блок не показываем.
-    const available = !!window.TaskingSync && window.TaskingSync.has("approvals");
+    const available = syncHas("approvals");
     detailApprovalsField.hidden = !available;
     detailRecurrenceField.hidden = !serverSupports("recurrence");
     detailMilestoneField.hidden = !serverSupports("milestone");
@@ -5181,6 +5187,13 @@
   let inboxUnread = 0;
   let inboxCache = null;
 
+  // Сервер сообщил, что он умеет (при мгновенном старте из кэша это
+  // приходит чуть позже первой отрисовки) — дорисовываем зависящее от этого.
+  window.addEventListener("tasking:features", () => {
+    if (state.screen === "inbox") renderInbox();
+    if (openTaskId && currentTask()) refreshDetailPassive();
+  });
+
   window.addEventListener("tasking:inbox", (e) => {
     inboxUnread = (e.detail && e.detail.unread) || 0;
     updateInboxBadge();
@@ -5229,7 +5242,11 @@
   }
 
   async function renderInbox() {
-    if (!window.TaskingSync || !window.TaskingSync.has("events")) {
+    if (window.TaskingSync && typeof window.TaskingSync.featuresKnown === "function" && !window.TaskingSync.featuresKnown()) {
+      inboxEl.innerHTML = `<div class="dashboard-header">Входящие</div><div class="dash-empty">Загрузка…</div>`;
+      return;
+    }
+    if (!syncHas("events")) {
       inboxEl.innerHTML = `<div class="dashboard-header">Входящие</div><div class="dash-empty">Лента событий появится после обновления серверной части (gas/Code.gs).</div>`;
       return;
     }
@@ -5471,7 +5488,7 @@
     }
   });
   syncStatusEl.addEventListener("click", () => {
-    if (window.TaskingSync && syncStatusEl.dataset.state === "error") window.TaskingSync.retryNow();
+    if (window.TaskingSync && window.TaskingSync.retryNow && syncStatusEl.dataset.state === "error") window.TaskingSync.retryNow();
   });
   window.addEventListener("tasking:sync-rejected", () => {
     showToast("Часть изменений сервер не принял (нет прав или задачу удалили) — на экране актуальные данные.");
