@@ -2054,29 +2054,38 @@
     });
     root.querySelectorAll(".inline-add-input[data-section-id]").forEach((input) => {
       input.focus();
+      let done = false; // поле уже обработано (Enter/Esc/blur) — не создаём задачу дважды
+      const commit = () => {
+        if (done) return;
+        done = true;
+        const parsed = parseQuickAddInput(input.value);
+        if (!parsed.title) return;
+        const task = createTask(getActiveProject(), input.dataset.sectionId, parsed.title);
+        if (parsed.assigneeId) task.assigneeId = parsed.assigneeId;
+        if (parsed.priority) task.priority = parsed.priority;
+        if (parsed.tags.length) task.tags = parsed.tags;
+        if (parsed.estimateHours != null) task.estimateHours = parsed.estimateHours;
+        if (parsed.due) task.due = parsed.due;
+        save();
+      };
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const parsed = parseQuickAddInput(input.value);
-          if (parsed.title) {
-            const task = createTask(getActiveProject(), input.dataset.sectionId, parsed.title);
-            if (parsed.assigneeId) task.assigneeId = parsed.assigneeId;
-            if (parsed.priority) task.priority = parsed.priority;
-            if (parsed.tags.length) task.tags = parsed.tags;
-            if (parsed.estimateHours != null) task.estimateHours = parsed.estimateHours;
-            if (parsed.due) task.due = parsed.due;
-            save();
-          }
+          commit();
           skipNextBlur = true;
           renderAll(true);
         } else if (e.key === "Escape") {
+          done = true;
           skipNextBlur = true;
           addingTaskSection = null;
           renderAll(true);
         }
       });
+      // Случайный щелчок мимо не должен выбрасывать набранное: сохраняем
+      // задачу, если текст есть, и закрываем поле.
       input.addEventListener("blur", () => {
         if (skipNextBlur) { skipNextBlur = false; return; }
+        commit();
         if (addingTaskSection === input.dataset.sectionId) {
           addingTaskSection = null;
           renderAll(true);
