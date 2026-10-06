@@ -131,6 +131,9 @@
         <input type="email" id="profileEmail" placeholder="name@example.com" autocomplete="email">
       </label>
       <label class="profile-view-check">
+        <input type="checkbox" id="profileAutoAssign"> Новые задачи сразу назначать на меня
+      </label>
+      <label class="profile-view-check">
         <input type="checkbox" id="profileNotify"> Присылать письма: назначения, сообщения, упоминания, согласования
       </label>
       <div class="auth-error" id="profileError" hidden></div>
@@ -163,6 +166,7 @@
   const profileViewChecks = Array.from(document.querySelectorAll("#profileViewsList input[type=checkbox]"));
   const profileEmail = document.getElementById("profileEmail");
   const profileNotify = document.getElementById("profileNotify");
+  const profileAutoAssign = document.getElementById("profileAutoAssign");
   const ALL_VIEWS = ["board", "list", "tree", "structure", "gantt", "calendar"];
 
   // Показывает/прячет кнопки-вкладки (Доска/Список/.../Гант) в шапке
@@ -208,6 +212,14 @@
     });
   }
 
+  // Значение настройки «назначать на меня»: сервер → локальная копия →
+  // по умолчанию включено только у «Соловьев Евгений».
+  function autoAssignValue(user) {
+    if (typeof user.autoAssignSelf === "boolean") return user.autoAssignSelf;
+    try { const v = localStorage.getItem("tasking-autoassign-" + user.id); if (v !== null) return v === "1"; } catch (_) { /* без хранилища */ }
+    return String(user.name || "").trim().toLowerCase() === "соловьев евгений";
+  }
+
   function updateProfileUi(user) {
     profileBtn.textContent = (user.name || user.login || "?").slice(0, 1).toUpperCase();
     profileBtn.title = user.name || user.login;
@@ -218,6 +230,7 @@
     profileViewChecks.forEach((cb) => { cb.checked = views.includes(cb.value); });
     profileEmail.value = user.email || "";
     profileNotify.checked = !!user.notifyEmail;
+    profileAutoAssign.checked = autoAssignValue(user);
     applyViewVisibility(views);
     profileAdminBtn.hidden = !user.isAdmin;
   }
@@ -311,7 +324,7 @@
       const res = await api("updateProfile", {
         profile: {
           name: profileName.value.trim(), color: profileColor.value, weeklyHours: profileHours.value, visibleViews: checkedViews,
-          email: profileEmail.value.trim(), notifyEmail: profileNotify.checked
+          email: profileEmail.value.trim(), notifyEmail: profileNotify.checked, autoAssignSelf: profileAutoAssign.checked
         }
       });
       if (!res.ok) {
@@ -325,6 +338,9 @@
       }
       const session = loadSession();
       session.user = res.user;
+      // Старый сервер поле не хранит — держим копию у себя.
+      session.user.autoAssignSelf = profileAutoAssign.checked;
+      try { localStorage.setItem("tasking-autoassign-" + res.user.id, profileAutoAssign.checked ? "1" : "0"); } catch (_) { /* без хранилища */ }
       saveSession(session);
       profileBtn.textContent = (res.user.name || res.user.login || "?").slice(0, 1).toUpperCase();
       profileBtn.title = res.user.name || res.user.login;

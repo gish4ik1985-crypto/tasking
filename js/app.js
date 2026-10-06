@@ -3440,6 +3440,20 @@
   // ---------- задачи ----------
 
   // Создаёт новую задачу верхнего уровня в указанном разделе указанного проекта.
+  // Назначать ли автора исполнителем новой задачи: настройка профиля; пока
+  // человек её не трогал — включено только у «Соловьев Евгений».
+  function autoAssignSelfId() {
+    const auth = window.TaskingAuth;
+    const user = auth && auth.getSession && (auth.getSession() || {}).user;
+    if (!user || !user.id) return null;
+    let on = user.autoAssignSelf;
+    if (typeof on !== "boolean") {
+      try { const v = localStorage.getItem("tasking-autoassign-" + user.id); if (v !== null) on = v === "1"; } catch (_) { /* без хранилища */ }
+    }
+    if (typeof on !== "boolean") on = String(user.name || "").trim().toLowerCase() === "соловьев евгений";
+    return on ? user.id : null;
+  }
+
   function createTask(proj, sectionId, title) {
     const siblings = proj.tasks.filter((t) => t.sectionId === sectionId);
     const task = {
@@ -3448,7 +3462,7 @@
       parentTaskId: null,
       title,
       notes: "",
-      assigneeId: null,
+      assigneeId: autoAssignSelfId(),
       watchers: [],
       start: "",
       due: "",

@@ -53,7 +53,7 @@ var DEFAULT_APP_URL = 'https://gish4ik1985-crypto.github.io/tasking/';
 // недостающие заголовки к существующим листам сам (см. tableOf).
 var SCHEMAS = {};
 SCHEMAS[SHEET_USERS] = ['id', 'login', 'passwordHash', 'name', 'color', 'weeklyHours', 'visibleViews', 'isAdmin',
-  'email', 'notifyEmail', 'inboxReadAt'];
+  'email', 'notifyEmail', 'inboxReadAt', 'autoAssignSelf'];
 SCHEMAS[SHEET_SESSIONS] = ['token', 'userId', 'expiresAt'];
 SCHEMAS[SHEET_PROJECTS] = ['id', 'name', 'color', 'parentId', 'creatorId', 'members', 'archived', 'createdAt', 'updatedAt'];
 SCHEMAS[SHEET_SECTIONS] = ['id', 'projectId', 'name', 'order'];
@@ -383,6 +383,7 @@ function publicUser(user, withPrivate) {
     out.login = user.login;
     out.email = user.email || '';
     out.notifyEmail = isTrue(user.notifyEmail);
+    if (user.autoAssignSelf !== '' && user.autoAssignSelf !== undefined && user.autoAssignSelf !== null) out.autoAssignSelf = isTrue(user.autoAssignSelf);
   }
   return out;
 }
@@ -417,6 +418,7 @@ function handleUpdateProfile(userId, profile) {
   }
   if (profile.email !== undefined) patch.email = sanitizeEmail(profile.email);
   if (profile.notifyEmail !== undefined) patch.notifyEmail = !!profile.notifyEmail;
+  if (profile.autoAssignSelf !== undefined) patch.autoAssignSelf = !!profile.autoAssignSelf;
   upsertRow(SHEET_USERS, patch);
   return { ok: true, user: publicUser(Object.assign({}, user, patch), true) };
 }
