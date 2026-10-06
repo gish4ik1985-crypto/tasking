@@ -1693,6 +1693,12 @@
       item.addEventListener("dragend", () => item.classList.remove("dragging"));
 
       item.addEventListener("dragover", (e) => {
+        if (dragTaskId && !dragProjectId) {
+          e.preventDefault();
+          e.stopPropagation();
+          item.classList.add("drag-over-nest");
+          return;
+        }
         if (!dragProjectId || dragProjectId === pid || isDescendantProjectOf(pid, dragProjectId)) return;
         e.preventDefault();
         e.stopPropagation();
@@ -1705,6 +1711,13 @@
       item.addEventListener("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (dragTaskId && !dragProjectId) {
+          item.classList.remove("drag-over-nest");
+          const id = dragTaskId;
+          dragTaskId = null;
+          moveTaskToProject(id, pid);
+          return;
+        }
         const zone = verticalDropZone(item, e);
         item.classList.remove("drag-over-nest", "drag-over-before", "drag-over-after");
         if (!dragProjectId || dragProjectId === pid || isDescendantProjectOf(pid, dragProjectId)) { dragProjectId = null; return; }
@@ -2220,6 +2233,48 @@
         dragTaskId = null;
       });
     });
+  }
+
+  // Переносит задачу вместе со всеми подзадачами в другой проект (drag-and-drop
+  // на проект в левом меню). Раздел подбирается в целевом проекте по имени
+  // (если такого нет — заводится), связи "после какой задачи" с оставшимися
+  // в старом проекте задачами рвутся: зависимости между проектами не живут.
+  function moveTaskToProject(taskId, targetProjectId) {
+    const src = findTaskOwnerProject(taskId);
+    const dst = state.projects.find((p) => p.id === targetProjectId);
+    if (!src || !dst || src.id === dst.id) return false;
+    const ids = new Set(getTaskDescendantIds(src, taskId));
+    const moving = src.tasks.filter((t) => ids.has(t.id));
+    const root = moving.find((t) => t.id === taskId);
+    if (!root) return false;
+    const sectionName = (src.sections.find((x) => x.id === root.sectionId) || {}).name || "К выполнению";
+    let section = dst.sections.find((x) => x.name.trim().toLowerCase() === sectionName.trim().toLowerCase()) || dst.sections[0];
+    if (!section) { section = { id: uid(), name: sectionName }; dst.sections.push(section); }
+    const bySection = {};
+    moving.forEach((t) => {
+      const n = (src.sections.find((x) => x.id === t.sectionId) || {}).name || sectionName;
+      let sec = dst.sections.find((x) => x.name.trim().toLowerCase() === n.trim().toLowerCase());
+      if (!sec) { sec = { id: uid(), name: n }; dst.sections.push(sec); }
+      bySection[t.id] = sec.id;
+    });
+    src.tasks = src.tasks.filter((t) => !ids.has(t.id));
+    src.tasks.forEach((t) => {
+      if (Array.isArray(t.dependsOn)) t.dependsOn = t.dependsOn.filter((d) => !ids.has(d));
+    });
+    moving.forEach((t) => {
+      t.sectionId = bySection[t.id] || section.id;
+      if (Array.isArray(t.dependsOn)) t.dependsOn = t.dependsOn.filter((d) => ids.has(d));
+    });
+    root.parentTaskId = null;
+    const siblings = dst.tasks.filter((t) => t.sectionId === root.sectionId && !t.parentTaskId);
+    root.order = siblings.length ? Math.max(...siblings.map((t) => t.order || 0)) + 1 : 0;
+    dst.tasks.push(...moving);
+    invalidateTreeCache();
+    save();
+    closeDetail();
+    renderAll();
+    showToast(`Перенесено в «${dst.name}»${moving.length > 1 ? ` (${moving.length} задач)` : ""}`, () => undo(), "Отменить");
+    return true;
   }
 
   // Переносит задачу в другой раздел (статус) — например, при
