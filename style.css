@@ -1223,7 +1223,8 @@ body {
   font-family: inherit;
   padding: 4px;
   border-radius: 6px;
-  height: 34px;
+  min-height: 34px;
+  overflow: hidden;
   /* .detail-title — прямой flex-item в .detail-body (flex-direction:column),
      а .detail-columns рядом с ним требует куда больше места, чем есть в
      ограниченном по высоте модальном окне. По умолчанию textarea (в

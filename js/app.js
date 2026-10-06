@@ -776,6 +776,11 @@
   const detailComplete = document.getElementById("detailComplete");
   const detailClose = document.getElementById("detailClose");
   const detailTitle = document.getElementById("detailTitle");
+  // Заголовок растёт по содержимому, чтобы длинное название было видно целиком.
+  function fitDetailTitle() {
+    detailTitle.style.height = "auto";
+    if (detailTitle.scrollHeight) detailTitle.style.height = detailTitle.scrollHeight + "px";
+  }
   const detailSection = document.getElementById("detailSection");
   const detailAssignee = document.getElementById("detailAssignee");
   const detailWatchers = document.getElementById("detailWatchers");
@@ -2072,11 +2077,9 @@
         if (e.key === "Enter") {
           e.preventDefault();
           commit();
-          skipNextBlur = true;
           renderAll(true);
         } else if (e.key === "Escape") {
           done = true;
-          skipNextBlur = true;
           addingTaskSection = null;
           renderAll(true);
         }
@@ -2084,7 +2087,7 @@
       // Случайный щелчок мимо не должен выбрасывать набранное: сохраняем
       // задачу, если текст есть, и закрываем поле.
       input.addEventListener("blur", () => {
-        if (skipNextBlur) { skipNextBlur = false; return; }
+        if (done) return;
         commit();
         if (addingTaskSection === input.dataset.sectionId) {
           addingTaskSection = null;
@@ -3569,6 +3572,7 @@
     fillDetail(task, proj, null);
     loadComments(taskId);
     openModalFocus(detailPanel, detailTitle);
+    fitDetailTitle();
   }
 
   // Обновляет открытое окно задачи после того, как с сервера пришли правки
@@ -3589,6 +3593,7 @@
     detailComplete.setAttribute("aria-pressed", String(task.completed));
     detailComplete.setAttribute("aria-label", task.completed ? "Снять отметку о выполнении" : "Отметить выполненной");
     setVal(detailTitle, task.title);
+    fitDetailTitle();
 
     if (detailSection !== focused) {
       detailSection.innerHTML = proj.sections.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
@@ -4422,6 +4427,8 @@
       }
     });
 
+    detailTitle.addEventListener("input", fitDetailTitle);
+    window.addEventListener("resize", fitDetailTitle);
     detailTitle.addEventListener("change", () => {
       const t = currentTask();
       if (!t) return;
