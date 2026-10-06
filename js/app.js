@@ -281,7 +281,6 @@
   let addingSubprojectOf = null;  // id проекта, для которого сейчас открыта строка добавления подпроекта
   let collapsedProjects = new Set(state.collapsedProjectIds);  // какие проекты свёрнуты в дереве сайдбара (переживает перезагрузку — см. state.collapsedProjectIds)
   let collapsedTreeTasks = new Set(state.collapsedTaskIds); // какие задачи свёрнуты в видах "Дерево"/"Структура"/"Гант" (state.collapsedTaskIds)
-  let skipNextBlur = false;       // служебный флаг, чтобы не закрывать поле ввода дважды при Enter+blur подряд
   let lastUiProjectId = null;     // id проекта, для которого сейчас загружены state.view/showCompleted (см. saveUiPrefsForProject)
 
   // Сворачивает/разворачивает проект в дереве сайдбара и сразу планирует
@@ -1755,6 +1754,7 @@
     addProjectInline.hidden = !addingProject;
     if (addingProject) {
       addProjectInput.value = "";
+      addProjectDone = false;
       addProjectInput.focus();
     }
 
@@ -1773,23 +1773,30 @@
   function bindProjectQuickAddEvents() {
     projectListEl.querySelectorAll(".inline-add-input[data-parent-project-id]").forEach((input) => {
       input.focus();
+      let done = false; // поле уже обработано (Enter/Esc/blur) — не создаём проект дважды
+      const commit = () => {
+        if (done) return;
+        done = true;
+        const name = input.value.trim();
+        if (name) createProject(name, input.dataset.parentProjectId);
+      };
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          const name = input.value.trim();
-          if (name) createProject(name, input.dataset.parentProjectId);
-          skipNextBlur = true;
+          commit();
           renderAll();
         } else if (e.key === "Escape") {
-          skipNextBlur = true;
+          done = true;
           addingSubprojectOf = null;
           renderSidebar();
         }
       });
+      // Щелчок мимо сохраняет набранное название, а не стирает его.
       input.addEventListener("blur", () => {
-        if (skipNextBlur) { skipNextBlur = false; return; }
+        if (done) return;
+        commit();
         addingSubprojectOf = null;
-        renderSidebar();
+        renderAll();
       });
     });
   }
@@ -5649,23 +5656,29 @@
     renderSidebar();
   });
 
+  let addProjectDone = false; // поле уже обработано — не создаём проект дважды
+  function commitNewProject() {
+    if (addProjectDone) return;
+    addProjectDone = true;
+    const name = addProjectInput.value.trim();
+    addingProject = false;
+    if (name) createProject(name, null);
+  }
   addProjectInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      const name = addProjectInput.value.trim();
-      skipNextBlur = true;
-      addingProject = false;
-      if (name) createProject(name, null);
+      commitNewProject();
       renderAll();
     } else if (e.key === "Escape") {
-      skipNextBlur = true;
+      addProjectDone = true;
       addingProject = false;
       renderSidebar();
     }
   });
+  // Щелчок мимо сохраняет набранное название, а не стирает его.
   addProjectInput.addEventListener("blur", () => {
-    if (skipNextBlur) { skipNextBlur = false; return; }
-    addingProject = false;
-    renderSidebar();
+    if (addProjectDone) return;
+    commitNewProject();
+    renderAll();
   });
 
   // Если перетаскиваемый проект отпустить в пустом месте списка (не на
