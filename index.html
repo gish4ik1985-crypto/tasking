@@ -25,6 +25,9 @@
     <button class="nav-dashboard" id="dashboardNavBtn" title="Рабочий стол">
       <span class="nav-dashboard-icon">◧</span><span class="nav-label">Рабочий стол</span><span class="nav-trash-count nav-unread-count" id="unreadCount" hidden aria-live="polite"></span>
     </button>
+    <button class="nav-dashboard" id="searchNavBtn" title="Поиск по задачам и сообщениям во всех проектах">
+      <span class="nav-dashboard-icon">⌕</span><span class="nav-label">Поиск</span>
+    </button>
     <button class="nav-dashboard" id="myTasksNavBtn" title="Мои задачи — всё, что назначено на вас, по всем проектам">
       <span class="nav-dashboard-icon">✔</span><span class="nav-label">Мои задачи</span><span class="nav-trash-count nav-unread-count" id="myOverdueCount" hidden title="Просрочено"></span>
     </button>
@@ -192,6 +195,11 @@
  <!-- экран "Мои задачи" — назначенное на меня по всем проектам -->
     <div class="dashboard-wrap" id="myTasksWrap" hidden>
       <div class="dashboard" id="myTasks"></div>
+    </div>
+
+    <!-- экран "Поиск" — по задачам и сообщениям во всех проектах -->
+    <div class="dashboard-wrap" id="searchWrap" hidden>
+      <div class="dashboard" id="searchScreen"></div>
     </div>
 
     <!-- экран "Входящие" — лента событий -->

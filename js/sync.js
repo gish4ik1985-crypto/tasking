@@ -604,6 +604,10 @@
     return api("deleteComment", { commentId });
   }
 
+  function searchComments(query) {
+    return api("searchComments", { query });
+  }
+
   function getInbox() {
     return api("getInbox", {});
   }
@@ -629,7 +633,7 @@
     pull, push, flush, markViewed, purgeTasks, resetSnapshot, startPolling, initFromCache,
     refreshNow: () => pollOnce(true), retryNow, hasPendingChanges, getStatus: () => status, has,
     featuresKnown: () => featuresKnown,
-    getComments, saveComment, deleteComment, getInbox, markInboxRead, decideApproval, resetApprovals,
+    getComments, saveComment, deleteComment, searchComments, getInbox, markInboxRead, decideApproval, resetApprovals,
     // Для тестов.
     _contentSignature: contentSignature
   };

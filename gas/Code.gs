@@ -77,7 +77,7 @@ var ALL_VIEWS = ['board', 'list', 'tree', 'structure', 'gantt', 'calendar'];
 // Что умеет эта версия сервера — клиент по этому списку решает, какими
 // путями пользоваться (и продолжает работать со старым сервером).
 var FEATURES = ['batch', 'softDelete', 'purge', 'revision', 'usersInState', 'logout', 'events', 'approvals',
-  'recurrence', 'milestone', 'email', 'mentions', 'adminUsers'];
+  'recurrence', 'milestone', 'email', 'mentions', 'adminUsers', 'search'];
 
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -170,6 +170,7 @@ function route(action, body) {
     case 'purgeTasks': return handlePurgeTasks(userId, body.taskIds);
     case 'markViewed': return handleMarkViewed(userId, body.taskId);
     case 'getComments': return handleGetComments(userId, body.taskId);
+    case 'searchComments': return handleSearchComments(userId, body.query);
     case 'saveComment': return handleSaveComment(userId, body);
     case 'deleteComment': return handleDeleteComment(userId, body.commentId);
     case 'decideApproval': return handleDecideApproval(userId, body);
@@ -1068,6 +1069,32 @@ function handleGetComments(userId, taskId) {
     .filter(function (ev) { return ev.taskId === taskId && ev.type !== 'comment' && ev.type !== 'mention'; })
     .map(function (ev) { return { id: ev.id, ts: Number(ev.ts), actorId: ev.actorId, type: ev.type, data: safeObj(ev.data) }; });
   return { ok: true, comments: comments, events: events };
+}
+
+// Поиск по тексту сообщений во всех задачах, к которым у человека есть доступ.
+// Возвращает по одной находке на задачу (последнее подходящее сообщение).
+function handleSearchComments(userId, query) {
+  var q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return { ok: true, hits: [] };
+  var tasksById = {};
+  readRows(SHEET_TASKS).forEach(function (t) { if (!t.deletedAt) tasksById[t.id] = t; });
+  var access = {};
+  var byTask = {};
+  readRows(SHEET_COMMENTS).forEach(function (c) {
+    var text = String(c.text || '');
+    if (text.toLowerCase().indexOf(q) === -1) return;
+    var task = tasksById[c.taskId];
+    if (!task) return;
+    if (access[c.taskId] === undefined) access[c.taskId] = canAccessTask(userId, task);
+    if (!access[c.taskId]) return;
+    var prev = byTask[c.taskId];
+    if (!prev || Number(c.createdAt) > prev.createdAt) {
+      byTask[c.taskId] = { taskId: c.taskId, commentId: c.id, authorId: c.authorId, createdAt: Number(c.createdAt), text: text.slice(0, 600) };
+    }
+  });
+  var hits = Object.keys(byTask).map(function (k) { return byTask[k]; });
+  hits.sort(function (a, b) { return b.createdAt - a.createdAt; });
+  return { ok: true, hits: hits.slice(0, 100) };
 }
 
 // Папка в Drive для вложений. Доступ «по ссылке» ставится один раз на саму

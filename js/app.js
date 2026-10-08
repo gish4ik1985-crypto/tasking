@@ -708,6 +708,9 @@
   const inboxCountEl = document.getElementById("inboxCount");
   const myTasksWrap = document.getElementById("myTasksWrap");
   const myTasksEl = document.getElementById("myTasks");
+  const searchNavBtn = document.getElementById("searchNavBtn");
+  const searchWrap = document.getElementById("searchWrap");
+  const searchScreenEl = document.getElementById("searchScreen");
   const inboxWrap = document.getElementById("inboxWrap");
   const inboxEl = document.getElementById("inbox");
   const calendarWrap = document.getElementById("calendarWrap");
@@ -1777,6 +1780,7 @@
     archiveNavBtn.classList.toggle("active", state.screen === "archive");
     myTasksNavBtn.classList.toggle("active", state.screen === "my");
     inboxNavBtn.classList.toggle("active", state.screen === "inbox");
+    searchNavBtn.classList.toggle("active", state.screen === "search");
     trashCountEl.hidden = !state.trash.length;
     trashCountEl.textContent = state.trash.length || "";
   }
@@ -5130,6 +5134,7 @@
     peopleWrap.hidden = true;
     myTasksWrap.hidden = true;
     inboxWrap.hidden = true;
+    searchWrap.hidden = true;
     calendarWrap.hidden = true;
     trashWrap.hidden = true;
     archiveWrap.hidden = true;
@@ -5152,6 +5157,9 @@
     } else if (state.screen === "my") {
       myTasksWrap.hidden = false;
       renderMyTasks();
+    } else if (state.screen === "search") {
+      searchWrap.hidden = false;
+      renderSearchScreen();
     } else if (state.screen === "inbox") {
       inboxWrap.hidden = false;
       renderInbox();
@@ -5277,6 +5285,102 @@
   // Лента событий из gas/Code.gs (лист Events): кто что сделал с моими задачами.
 
   let inboxUnread = 0;
+  // ---------- поиск по всем проектам: названия, описания, метки и сообщения ----------
+
+  let globalSearchQuery = "";
+  let searchCommentHits = { q: "", hits: [] };
+  let searchTimer = null;
+  let searchSeq = 0;
+
+  function highlightHtml(text, q) {
+    const safe = escapeHtml(text);
+    if (!q) return safe;
+    const esc = escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return safe.replace(new RegExp(esc, "gi"), (m) => `<mark>${m}</mark>`);
+  }
+
+  function snippetAround(text, q, radius) {
+    const flat = String(text || "").replace(/\s+/g, " ").trim();
+    const i = flat.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return flat.slice(0, radius * 2);
+    const from = Math.max(0, i - radius);
+    return (from > 0 ? "…" : "") + flat.slice(from, i + q.length + radius) + (i + q.length + radius < flat.length ? "…" : "");
+  }
+
+  function renderSearchResults() {
+    const box = document.getElementById("searchResults");
+    if (!box) return;
+    const q = globalSearchQuery.trim();
+    if (q.length < 2) {
+      box.innerHTML = `<div class="dash-empty">Введите хотя бы 2 символа — ищем по названиям, описаниям, меткам и сообщениям в задачах всех ваших проектов.</div>`;
+      return;
+    }
+    const ql = q.toLowerCase();
+    const commentByTask = {};
+    if (searchCommentHits.q === q) searchCommentHits.hits.forEach((h) => { commentByTask[h.taskId] = h; });
+    const rows = [];
+    state.projects.forEach((p) => {
+      p.tasks.forEach((t) => {
+        const hay = [t.title, t.notes, assigneeName(t), (t.tags || []).join(" ")].join(" ").toLowerCase();
+        const ch = commentByTask[t.id];
+        if (!hay.includes(ql) && !ch) return;
+        rows.push({ p, t, ch, inTitle: (t.title || "").toLowerCase().includes(ql), inNotes: (t.notes || "").toLowerCase().includes(ql) });
+      });
+    });
+    rows.sort((a, b) => (b.inTitle - a.inTitle) || ((a.t.completed ? 1 : 0) - (b.t.completed ? 1 : 0)));
+    const usersById = {};
+    state.users.forEach((u) => { usersById[u.id] = u; });
+    const pending = syncHas("search") && searchCommentHits.q !== q ? `<div class="dash-empty">Ищем в сообщениях…</div>` : "";
+    const list = rows.slice(0, 200).map(({ p, t, ch, inNotes, inTitle }) => {
+      const parts = [];
+      if (inNotes && !inTitle) parts.push(`<div class="search-snippet">Описание: ${highlightHtml(snippetAround(t.notes, q, 60), q)}</div>`);
+      if (ch) {
+        const author = usersById[ch.authorId];
+        parts.push(`<div class="search-snippet">💬 ${escapeHtml(author ? author.name : "Сообщение")}: ${highlightHtml(snippetAround(ch.text, q, 60), q)}</div>`);
+      }
+      const flags = [t.completed ? "выполнена" : "", t.archived ? "в архиве" : ""].filter(Boolean).join(", ");
+      return `<button type="button" class="search-row" data-open="${t.id}">
+        <div class="search-title">${highlightHtml(t.title || "Без названия", q)}${flags ? ` <span class="search-flag">${flags}</span>` : ""}</div>
+        <div class="search-meta">📁 ${escapeHtml(p.name)}${t.assigneeId ? " · " + escapeHtml(assigneeName(t)) : ""}</div>
+        ${parts.join("")}
+      </button>`;
+    }).join("");
+    box.innerHTML = (list || (pending ? "" : `<div class="dash-empty">Ничего не найдено по «${escapeHtml(q)}».</div>`)) + pending;
+    box.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => openDetail(b.dataset.open)));
+  }
+
+  function runCommentSearch() {
+    const q = globalSearchQuery.trim();
+    if (q.length < 2 || !syncHas("search") || !window.TaskingSync.searchComments) return;
+    const seq = ++searchSeq;
+    const done = (hits) => {
+      if (seq !== searchSeq) return;
+      searchCommentHits = { q, hits };
+      if (state.screen === "search") renderSearchResults();
+    };
+    window.TaskingSync.searchComments(q).then((res) => done(res && res.ok ? res.hits : [])).catch(() => done([]));
+  }
+
+  function renderSearchScreen() {
+    if (!document.getElementById("globalSearchInput")) {
+      searchScreenEl.innerHTML = `<div class="dashboard-header">Поиск</div>
+        <input type="search" id="globalSearchInput" class="global-search-input" placeholder="Название, описание, метка или текст сообщения…" autocomplete="off">
+        <div id="searchResults"></div>`;
+      const input = document.getElementById("globalSearchInput");
+      input.addEventListener("input", () => {
+        globalSearchQuery = input.value;
+        renderSearchResults();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(runCommentSearch, 350);
+      });
+    }
+    const input = document.getElementById("globalSearchInput");
+    input.value = globalSearchQuery;
+    renderSearchResults();
+    runCommentSearch();
+    input.focus();
+  }
+
   let inboxCache = null;
 
   // Сервер сообщил, что он умеет (при мгновенном старте из кэша это
@@ -5602,6 +5706,7 @@
     if (state.screen === "dashboard") return "#dashboard";
     if (state.screen === "my") return "#my";
     if (state.screen === "inbox") return "#inbox";
+    if (state.screen === "search") return "#search";
     if (state.screen === "people") return "#people";
     if (state.screen === "trash") return "#trash";
     if (state.screen === "archive") return "#archive";
@@ -5645,6 +5750,7 @@
     if (parts[0] === "dashboard") { state.screen = "dashboard"; renderAll(); return true; }
     if (parts[0] === "my") { state.screen = "my"; renderAll(); return true; }
     if (parts[0] === "inbox") { state.screen = "inbox"; renderAll(); return true; }
+    if (parts[0] === "search") { state.screen = "search"; renderAll(); return true; }
     // Прямая ссылка на задачу (например, из письма-уведомления).
     if (parts[0] === "task" && parts[1]) {
       const owner = findTaskOwnerProject(parts[1]);
@@ -5706,6 +5812,11 @@
 
   myTasksNavBtn.addEventListener("click", () => {
     state.screen = "my";
+    commit();
+  });
+
+  searchNavBtn.addEventListener("click", () => {
+    state.screen = "search";
     commit();
   });
 
