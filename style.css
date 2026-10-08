@@ -2722,3 +2722,12 @@ body {
 .search-snippet { font-size: 13px; margin-top: 6px; color: var(--muted, #666); overflow-wrap: anywhere; }
 .search-flag { font-size: 11px; font-weight: 400; color: var(--muted, #888); }
 .search-row mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* ---------- приоритет в шапке задачи ---------- */
+.priority-seg { display: inline-flex; gap: 2px; margin: 0 auto 0 14px; padding: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; }
+.priority-seg button { border: none; background: transparent; font: inherit; font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; color: var(--muted, #888); }
+.priority-seg button:hover:not(:disabled):not(.active) { background: var(--border); }
+.priority-seg button:disabled { cursor: default; }
+.priority-seg button.active.priority-low { background: var(--success-light); color: var(--success); }
+.priority-seg button.active.priority-medium { background: var(--warn-light); color: var(--warn); }
+.priority-seg button.active.priority-high { background: var(--danger-light); color: var(--danger); }

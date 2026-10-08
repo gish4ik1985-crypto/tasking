@@ -229,6 +229,11 @@
     <div class="detail-modal" role="dialog" aria-modal="true" aria-label="Детали задачи">
       <div class="detail-header">
         <button class="detail-complete" id="detailComplete" title="Отметить выполненной" aria-label="Отметить выполненной" aria-pressed="false"></button>
+        <div class="priority-seg" id="detailPrioritySeg" role="group" aria-label="Приоритет">
+          <button type="button" data-priority="low" class="priority-low">Низкий</button>
+          <button type="button" data-priority="medium" class="priority-medium">Средний</button>
+          <button type="button" data-priority="high" class="priority-high">Высокий</button>
+        </div>
         <button class="detail-close" id="detailClose" title="Закрыть" aria-label="Закрыть">×</button>
       </div>
       <div class="detail-body">
@@ -342,7 +347,7 @@
               <button type="button" id="datesAutoToggleBtn"></button>
             </div>
 
-            <div class="detail-field">
+            <div class="detail-field" hidden>
               <label>Приоритет</label>
               <select id="detailPriority">
                 <option value="low">Низкий</option>

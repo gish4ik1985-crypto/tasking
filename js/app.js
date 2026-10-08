@@ -793,6 +793,23 @@
   const datesAutoText = document.getElementById("datesAutoText");
   const datesAutoToggleBtn = document.getElementById("datesAutoToggleBtn");
   const detailPriority = document.getElementById("detailPriority");
+  const detailPrioritySeg = document.getElementById("detailPrioritySeg");
+  // Кнопки приоритета в шапке — вид на скрытый <select id="detailPriority">,
+  // который по-прежнему хранит значение и обрабатывает смену.
+  function syncPrioritySeg() {
+    detailPrioritySeg.querySelectorAll("button").forEach((b) => {
+      const on = b.dataset.priority === detailPriority.value;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.disabled = detailPriority.disabled;
+    });
+  }
+  detailPrioritySeg.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-priority]");
+    if (!b || detailPriority.disabled) return;
+    detailPriority.value = b.dataset.priority;
+    detailPriority.dispatchEvent(new Event("change"));
+  });
   const detailEstimate = document.getElementById("detailEstimate");
   const detailAutoTags = document.getElementById("detailAutoTags");
   const detailTags = document.getElementById("detailTags");
@@ -3744,6 +3761,7 @@
     detailStart.disabled = readOnly || detailStart.disabled;
     detailDue.disabled = readOnly || detailDue.disabled;
     detailPriority.disabled = readOnly;
+    syncPrioritySeg();
     detailEstimate.disabled = readOnly;
     detailTags.disabled = readOnly;
     detailRecurrence.disabled = readOnly;
@@ -4595,6 +4613,7 @@
       const t = currentTask();
       if (!t) return;
       t.priority = detailPriority.value;
+      syncPrioritySeg();
       commit(true);
     });
 
